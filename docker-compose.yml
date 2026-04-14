@@ -1,0 +1,11 @@
+version: '3.8'
+name: docker-compose-eaas
+
+
+include:
+  - minio/minio_compose.yaml
+
+
+networks:
+  eaas-network:
+    driver: bridge
