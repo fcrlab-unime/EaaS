@@ -7,24 +7,22 @@ load_dotenv()
 
 class MinioManager:
     def __init__(self):
-        # Configurazione tramite variabili d'ambiente
+        
         self.endpoint = os.getenv("MINIO_ENDPOINT", "localhost:9000")
         self.user = os.getenv("MINIO_ROOT_USER", "minioadmin")
         self.password = os.getenv("MINIO_ROOT_PASSWORD", "minioadmin")
         self.secure = os.getenv("MINIO_SECURE", "False").lower() == "true"
         
-        # Inizializzazione Client
         self.client = Minio(
             self.endpoint,
-            access_key=self.access_key,
-            secret_key=self.secret_key,
+            access_key=self.user,
+            secret_key=self.password,
             secure=self.secure
         )
 
     def upload_file(self, bucket_name, object_name, file_path):
         """Carica un file nel bucket specificato"""
         try:
-            # Crea il bucket se non esiste
             if not self.client.bucket_exists(bucket_name):
                 self.client.make_bucket(bucket_name)
                 print(f"Bucket '{bucket_name}' creato.")
@@ -45,5 +43,5 @@ class MinioManager:
 
 if __name__ == "__main__":
     manager = MinioManager()
-    # manager.upload_file("test-bucket", "mio-doc.pdf", "./documento.pdf")
-    # manager.download_file("test-bucket", "mio-doc.pdf", "./scaricato.pdf")
+    # manager.upload_file("models", "pyenv", "pyvenv.cfg")
+    # manager.download_file("models", "pyenv", "./scaricato.pdf")
