@@ -10,23 +10,21 @@ services:
         --reserve-memory 0M
         --node-id 0
         --check=false
-        # Kafka ascolta su 9092 per l'esterno e 29092 per l'interno
-        --kafka-addr internal://0.0.0.0:29092,external://0.0.0.0:9092
-        # Pubblicizza il NOME del container per chi è dentro la rete Docker
-        --advertise-kafka-addr internal://redpanda:29092,external://192.168.128.236:9092
+        --kafka-addr internal://0.0.0.0:29092,external://0.0.0.0:9092 
+        --advertise-kafka-addr internal://redpanda:29092,external://localhost:9092
         --set auto_create_topics_enabled=true
         --set default_topic_partitions=10
     ports:
       - "9092:9092"
       - "9644:9644"
     networks:
-      - eaas-network # Assicurati che sia la stessa rete degli altri
+      - eaas-network 
     volumes:
       - redpanda_:/var/lib/redpanda/data
 
 networks:
   eaas-network:
-    external: true
+    driver: bridge
 
 volumes:
   redpanda_:
