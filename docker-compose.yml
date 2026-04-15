@@ -1,9 +1,10 @@
-version: '3.8'
 name: docker-compose-eaas
 
 
 include:
   - minio/minio_compose.yaml
+  - kafka/kafka_compose.yaml
+  - training/train_compose.yaml
 
 
 networks:
