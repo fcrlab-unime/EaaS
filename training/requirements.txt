@@ -4,3 +4,4 @@ python-dotenv
 torch
 torchvision
 pandas
+onnxscript

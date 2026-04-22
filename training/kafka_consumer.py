@@ -1,6 +1,8 @@
 import json
+import time
 import logging
 from confluent_kafka import Consumer, KafkaError
+
 
 logger = logging.getLogger(__name__)
 
@@ -25,11 +27,14 @@ def consume_loop(consumer: Consumer, handler):
             msg = consumer.poll(timeout=1.0)
             if msg is None:
                 continue
+            print(f"[{time.strftime('%H:%M:%S')}] Messaggio ricevuto!")
+            
             if msg.error():
                 if msg.error().code() == KafkaError._PARTITION_EOF:
                     continue
                 logger.error("Kafka error: %s", msg.error())
                 continue
+            
 
             try:
                 job = json.loads(msg.value().decode("utf-8"))
