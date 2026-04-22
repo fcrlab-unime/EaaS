@@ -1,0 +1,26 @@
+services:
+  training:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: training-service
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_SECURE: ${MINIO_SECURE:-false}
+      KAFKA_BOOTSTRAP: ${KAFKA_BOOTSTRAP:-redpanda:29092}
+      KAFKA_TOPIC_IN: ${KAFKA_TOPIC_IN:-train-jobs}
+      KAFKA_TOPIC_OUT: ${KAFKA_TOPIC_OUT:-train-results}
+      KAFKA_GROUP_ID: ${KAFKA_GROUP_ID:-training-group}
+    volumes:
+      - /app/downloads
+    networks:
+      - eaas-network
+
+networks:
+  eaas-network:
+    driver: bridge

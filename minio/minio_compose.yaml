@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  minio:
+    image: minio/minio
+    container_name: minio
+    ports:
+      - "${MINIO_PORT}:9000"
+      - "${MINIO_CONSOLE_PORT}:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT}
+    command: server /data --console-address ":${MINIO_CONSOLE_PORT}"
+    volumes:
+      - ./minio_data:/data
+    networks:
+      - eaas-network
+
+  createbuckets:
+    image: minio/mc
+    container_name: minio-setup
+    depends_on:
+      - minio
+    networks:
+      - eaas-network
+    entrypoint: >
+      /bin/sh -c "
+      echo 'In attesa di MinIO...';
+      until mc alias set myminio http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD} > /dev/null 2>&1; do
+        echo 'MinIO non è ancora pronto, riprovo tra 2 secondi...';
+        sleep 2;
+      done;
+
+      echo 'Creazione bucket in corso...';
+      mc mb --ignore-existing myminio/models;
+      mc mb --ignore-existing myminio/weights;
+      mc mb --ignore-existing myminio/datasets;
+      
+      mc anonymous set public myminio/models;
+      mc anonymous set public myminio/weights;
+      mc anonymous set public myminio/datasets;
+      
+      echo 'Tutti i bucket sono pronti!';
+      exit 0;
+      "
+
+networks:
+  eaas-network:
+    driver: bridge
