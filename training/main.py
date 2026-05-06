@@ -7,7 +7,7 @@ import tarfile
 import torch
 import shutil
 from pathlib import Path
-from kafka_consumer import make_consumer, consume_loop
+from kafka_consumer import make_consumer, consume_loop, send_kafka_message
 from minio_client import make_client, download, upload
 from train import train
 
@@ -46,7 +46,7 @@ def handle_job(job: dict):
     base_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        logger.info(f"🚀 Inizio elaborazione Job: {job_id}")
+        logger.info(f"Inizio elaborazione Job: {job_id}")
 
         # --- 1. DOWNLOAD DA MINIO ---
         # Scarichiamo lo script dell'architettura
@@ -68,18 +68,19 @@ def handle_job(job: dict):
         # Istanziamo passando i parametri estratti dal JSON di Kafka
         # Esempio: ModelClass(input_channels=1, num_layers=3)
         model = ModelClass(**model_params)
-        logger.info(f"✅ Modello {class_name} istanziato con successo.")
+        logger.info(f"Modello {class_name} istanziato con successo.")
 
         # --- 3. CARICAMENTO PESI INIZIALI ---
         if weights_path and os.path.exists(weights_path):
             model.load_state_dict(torch.load(str(weights_path), map_location="cpu"))
-            logger.info(f"📥 Pesi iniziali caricati da {job['weights']}")
+            logger.info(f"Pesi iniziali caricati da {job['weights']}")
 
         # --- 4. TRAINING ---
         # Passiamo il modello e il percorso del CSV alla funzione di train
         model = train(model, dataset_local, epochs=job["epochs"])
 
         # --- 5. EXPORT ONNX ---
+        import onnx as _onnx
         onnx_path = base_dir / "model.onnx"
         dummy_input = torch.randn(1, model_params["input_channels"], 1)
         torch.onnx.export(
@@ -91,34 +92,46 @@ def handle_job(job: dict):
             dynamic_axes={"input": {0: "batch_size"}, "output": {0: "batch_size"}},
             do_constant_folding=True,
         )
-        logger.info(f"✅ ONNX esportato: {onnx_path}")
+        # Forza salvataggio inline: elimina il file .data esterno se generato
+        _onnx_model = _onnx.load(str(onnx_path))
+        _onnx.save_model(_onnx_model, str(onnx_path), save_as_external_data=False)
+        logger.info(f"ONNX esportato (inline, nessun .data esterno): {onnx_path}")
 
         # --- 6. SALVATAGGIO E METADATI ---
         output_path = base_dir / "trained_model.pth"
-        torch.save({...}, str(output_path))
+        torch.save(model.state_dict(), str(output_path))
 
         # --- 7. UPLOAD RISULTATI ---
-        minio_pth_dest  = f"trained/{job_id}/{class_name}_final.pth"
-        minio_onnx_dest = f"trained/{job_id}/{class_name}_final.onnx"
+        minio_pth_dest  = f"{job_id}/{class_name}_trained.pth"
+        minio_onnx_dest = f"{job_id}/{class_name}_final.onnx"
 
         upload(minio, "models", minio_pth_dest,  str(output_path))
-        upload(minio, "models", minio_onnx_dest, str(onnx_path))
+        upload(minio, "onnx", minio_onnx_dest, str(onnx_path))
 
-        logger.info(f"📤 .pth caricato in: {minio_pth_dest}")
-        logger.info(f"📤 .onnx caricato in: {minio_onnx_dest}")
+        logger.info(f".pth caricato in: {minio_pth_dest}")
+        logger.info(f".onnx caricato in: {minio_onnx_dest}")
+
+        quantizer_request = {
+            "job_id": job_id,
+            "onnx_path": minio_onnx_dest,
+            "dataset": job["dataset"]
+        }
+        send_kafka_message(quantizer_request)
+        logger.info(f"Richiesta di quantizzazione inviata per Job {job_id}")
 
     except Exception as e:
-        logger.error(f"❌ Errore critico nel Job {job_id}: {str(e)}", exc_info=True)
-        # Qui potresti inviare un messaggio Kafka di errore su un topic di 'status'
-    
+        logger.error(f"Errore critico nel Job {job_id}: {str(e)}", exc_info=True)
+
     finally:
-        # --- 7. CLEANUP FINALE ---
+        # --- 8. CLEANUP FINALE ---
         if base_dir.exists():
             shutil.rmtree(base_dir)
-            logger.info(f"🧹 Pulizia cartella temporanea completata per {job_id}")
-            
+            logger.info(f"Pulizia cartella temporanea completata per {job_id}")
 
-      
+
+    
+
+
 consumer = make_consumer(
     bootstrap=os.environ["KAFKA_BOOTSTRAP"],
     topic=os.environ["KAFKA_TOPIC_IN"],

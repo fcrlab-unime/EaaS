@@ -5,6 +5,7 @@ include:
   - minio/minio_compose.yaml
   - kafka/kafka_compose.yaml
   - training/train_compose.yaml
+  - quantization/quant_compose.yml
 
 
 networks:
