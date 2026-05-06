@@ -10,8 +10,8 @@ logger = logging.getLogger(__name__)
 def make_client() -> Minio:
     return Minio(
         os.environ["MINIO_ENDPOINT"],
-        access_key=os.environ["MINIO_ACCESS_KEY"],
-        secret_key=os.environ["MINIO_SECRET_KEY"],
+        access_key=os.environ["MINIO_ROOT_USER"],
+        secret_key=os.environ["MINIO_ROOT_PASSWORD"],
         secure=os.environ.get("MINIO_SECURE", "false").lower() == "true",
     )
 

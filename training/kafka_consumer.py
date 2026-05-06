@@ -1,7 +1,8 @@
 import json
 import time
 import logging
-from confluent_kafka import Consumer, KafkaError
+from confluent_kafka import Consumer, KafkaError, Producer
+import os 
 
 
 logger = logging.getLogger(__name__)
@@ -47,3 +48,24 @@ def consume_loop(consumer: Consumer, handler):
 
     finally:
         consumer.close()
+        
+def delivery_report(err, msg):
+    if err:
+        print(f"Delivery failed: {err}")
+    else:
+        print(f"Delivered to {msg.topic()} [{msg.partition()}] offset {msg.offset()}")
+
+def send_kafka_message(message: dict):
+    """Funzione helper per inviare messaggi a Kafka (es. per notificare la quantizzazione)"""
+    producer = Producer({
+    "bootstrap.servers": os.environ.get("KAFKA_BOOTSTRAP", "localhost:9092"),
+})
+
+    producer.produce(
+        topic=os.environ.get("KAFKA_TOPIC_OUT", "quant-jobs"),
+        value=json.dumps(message).encode('utf-8'),
+        callback=delivery_report,
+    )
+    
+    producer.flush()
+    
