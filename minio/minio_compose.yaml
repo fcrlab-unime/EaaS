@@ -36,10 +36,16 @@ services:
       mc mb --ignore-existing myminio/models;
       mc mb --ignore-existing myminio/weights;
       mc mb --ignore-existing myminio/datasets;
+      mc mb --ignore-existing myminio/onnx;
+      mc mb --ignore-existing myminio/quantized-models;
+      mc mb --ignore-existing myminio/bin;
       
       mc anonymous set public myminio/models;
       mc anonymous set public myminio/weights;
       mc anonymous set public myminio/datasets;
+      mc anonymous set public myminio/onnx;
+      mc anonymous set public myminio/quantized-models;
+      mc anonymous set public myminio/bin;
       
       echo 'Tutti i bucket sono pronti!';
       exit 0;
