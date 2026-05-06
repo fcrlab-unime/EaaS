@@ -1,4 +1,4 @@
-#!KAFKA_BOOTSTRAP=localhost:9092 KAFKA_TOPIC_IN=train-jobs python producer_test.py
+#!KAFKA_BOOTSTRAP=localhost:9092 KAFKA_TOPIC_IN=train-jobs python producer.py
 import json
 import os
 from confluent_kafka import Producer
@@ -9,10 +9,15 @@ producer = Producer({
 
 job = {
     "job_id": "train_test_001",
-    "model_script": "resnet_custom.py",
-    "class_name": "MyResNet",
-    "weights": "weights_v1.pth",
-    "dataset": "mnist_data.zip",
+    "model_script": "CCN1D.py",
+    "class_name": "CCN1D",
+    "model_params": {
+        "input_channels": 122,
+        "hidden_channels": 512,
+        "num_layers": 4
+    },
+    "weights": "best_model.pth",
+    "dataset": "train_scaled.csv",
     "epochs": 2
 }
 
