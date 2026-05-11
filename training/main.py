@@ -76,10 +76,28 @@ def handle_job(job: dict):
             logger.info(f"Pesi iniziali caricati da {job['weights']}")
 
         # --- 4. TRAINING ---
-        # Passiamo il modello e il percorso del CSV alla funzione di train
-        model = train(model, dataset_local, epochs=job["epochs"])
+        model, test_metrics, split_dfs = train(
+            model,
+            dataset_local,
+            patience=job.get("patience", 10),
+            max_epochs=job.get("max_epochs", 500),
+            label_column=job.get("label_column"),
+            train_ratio=job.get("train_ratio", 0.70),
+            val_ratio=job.get("val_ratio", 0.15),
+        )
+        logger.info(f"Test metrics: {test_metrics}")
 
-        # --- 5. EXPORT ONNX ---
+        # --- 5. UPLOAD SPLIT CSV SU MINIO ---
+        splits_dir = base_dir / "splits"
+        splits_dir.mkdir(exist_ok=True)
+        for split_name, split_df in split_dfs.items():
+            split_local = splits_dir / f"{split_name}.csv"
+            split_df.to_csv(str(split_local), index=False)
+            minio_split_key = f"{job_id}/{split_name}.csv"
+            upload(minio, "datasets", minio_split_key, str(split_local))
+            logger.info(f"Split '{split_name}' caricato in splits/{minio_split_key}")
+
+        # --- 7. EXPORT ONNX ---
         import onnx as _onnx
         onnx_path = base_dir / "model.onnx"
         dummy_input = torch.randn(1, model_params["input_channels"], 1)
@@ -97,16 +115,16 @@ def handle_job(job: dict):
         _onnx.save_model(_onnx_model, str(onnx_path), save_as_external_data=False)
         logger.info(f"ONNX esportato (inline, nessun .data esterno): {onnx_path}")
 
-        # --- 6. SALVATAGGIO E METADATI ---
+        # --- 8. SALVATAGGIO PESI ---
         output_path = base_dir / "trained_model.pth"
         torch.save(model.state_dict(), str(output_path))
 
-        # --- 7. UPLOAD RISULTATI ---
+        # --- 9. UPLOAD MODELLO ---
         minio_pth_dest  = f"{job_id}/{class_name}_trained.pth"
         minio_onnx_dest = f"{job_id}/{class_name}_final.onnx"
 
         upload(minio, "models", minio_pth_dest,  str(output_path))
-        upload(minio, "onnx", minio_onnx_dest, str(onnx_path))
+        upload(minio, "onnx",   minio_onnx_dest, str(onnx_path))
 
         logger.info(f".pth caricato in: {minio_pth_dest}")
         logger.info(f".onnx caricato in: {minio_onnx_dest}")
@@ -114,7 +132,10 @@ def handle_job(job: dict):
         quantizer_request = {
             "job_id": job_id,
             "onnx_path": minio_onnx_dest,
-            "dataset": job["dataset"]
+            "train_split": f"{job_id}/train.csv",
+            "test_split": f"{job_id}/test.csv",
+            "label_column": job.get("label_column"),
+            "test_metrics": test_metrics,
         }
         send_kafka_message(quantizer_request)
         logger.info(f"Richiesta di quantizzazione inviata per Job {job_id}")
