@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EaaS — Training Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f0f2f5;
+      color: #1a1a2e;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #1a1a2e;
+      color: #fff;
+      padding: 24px 40px;
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+    }
+    header h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: 1px; }
+    header p  { font-size: 0.9rem; opacity: 0.55; }
+
+    main {
+      max-width: 860px;
+      margin: 40px auto;
+      padding: 0 20px 60px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    .grid .card:last-child { grid-column: 1 / -1; }
+
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 28px 28px 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .step-badge {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      background: #1a1a2e;
+      color: #fff;
+      font-size: 0.78rem;
+      font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .card h2 { font-size: 1rem; font-weight: 600; }
+    .optional { font-size: 0.78rem; font-weight: 400; color: #888; margin-left: 4px; }
+
+    .field { margin-bottom: 16px; }
+    .field:last-child { margin-bottom: 0; }
+
+    .field-label-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+    label {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    .auto-badge {
+      display: none;
+      font-size: 0.7rem;
+      font-weight: 600;
+      background: #dcfce7;
+      color: #16a34a;
+      border: 1px solid #86efac;
+      border-radius: 20px;
+      padding: 1px 8px;
+    }
+    .auto-badge.visible { display: inline-block; }
+
+    input[type="text"],
+    input[type="number"],
+    select,
+    textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1.5px solid #dde1e7;
+      border-radius: 8px;
+      font-size: 0.92rem;
+      font-family: inherit;
+      background: #fafbfc;
+      transition: border-color 0.15s, background 0.15s;
+      outline: none;
+    }
+    input[type="text"]:focus,
+    input[type="number"]:focus,
+    select:focus,
+    textarea:focus { border-color: #4361ee; background: #fff; }
+
+    input.autofilled, textarea.autofilled, select.autofilled {
+      border-color: #86efac;
+      background: #f0fdf4;
+    }
+
+    textarea {
+      resize: vertical;
+      font-family: "SF Mono", "Fira Code", "Courier New", monospace;
+      font-size: 0.83rem;
+    }
+
+    /* Class picker shown when >1 class is detected */
+    .class-picker {
+      display: none;
+      margin-bottom: 8px;
+    }
+    .class-picker.visible { display: block; }
+    .class-picker label { text-transform: none; font-size: 0.8rem; color: #888; }
+    .class-picker select { font-size: 0.88rem; padding: 7px 10px; }
+
+    .file-upload {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .file-btn {
+      padding: 9px 16px;
+      background: #f0f2f5;
+      border: 1.5px solid #dde1e7;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s;
+    }
+    .file-btn:hover { background: #e4e7ed; }
+    input[type="file"] { display: none; }
+    .file-name {
+      font-size: 0.84rem;
+      color: #666;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .file-name.loaded { color: #2d6a4f; font-weight: 500; }
+
+    select:disabled { color: #aaa; cursor: not-allowed; }
+
+    .submit-row {
+      margin-top: 28px;
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    button[type="submit"] {
+      padding: 14px 40px;
+      background: #4361ee;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+    button[type="submit"]:hover:not(:disabled) { background: #3451d1; }
+    button[type="submit"]:active:not(:disabled) { transform: scale(0.98); }
+    button[type="submit"]:disabled { background: #a0aec0; cursor: not-allowed; }
+
+    .result {
+      margin-top: 24px;
+      padding: 18px 22px;
+      border-radius: 10px;
+      font-size: 0.93rem;
+      line-height: 1.6;
+    }
+    .result.hidden { display: none; }
+    .result.success { background: #d1fae5; border: 1.5px solid #6ee7b7; color: #065f46; }
+    .result.error   { background: #fee2e2; border: 1.5px solid #fca5a5; color: #991b1b; }
+    .result code {
+      background: rgba(0,0,0,0.07);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 0.88rem;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .hint { font-size: 0.78rem; color: #999; margin-top: 5px; }
+    .hint.warn { color: #b45309; }
+
+    .early-stopping-row { margin-bottom: 0; }
+    .early-stopping-fields {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>EaaS</h1>
+  <p>Training as a Service</p>
+</header>
+
+<main>
+  <form id="jobForm" novalidate>
+    <div class="grid">
+
+      <!-- Card 1: Model -->
+      <div class="card">
+        <div class="card-header">
+          <div class="step-badge">1</div>
+          <h2>Architettura del Modello</h2>
+        </div>
+
+        <div class="field">
+          <div class="field-label-row"><label>Script Python (.py)</label></div>
+          <div class="file-upload">
+            <label class="file-btn" for="modelScriptInput">Scegli file</label>
+            <input type="file" id="modelScriptInput" name="model_script" accept=".py">
+            <span class="file-name" id="modelScriptName">Nessun file selezionato</span>
+          </div>
+        </div>
+
+        <!-- Multi-class picker (shown only when >1 class found) -->
+        <div class="class-picker" id="classPicker">
+          <label for="classPickerSelect">Classi rilevate — seleziona:</label>
+          <select id="classPickerSelect"></select>
+        </div>
+
+        <div class="field">
+          <div class="field-label-row">
+            <label for="classNameInput">Nome della classe</label>
+            <span class="auto-badge" id="classNameBadge">auto-rilevato</span>
+          </div>
+          <input type="text" id="classNameInput" name="class_name" placeholder="es. CCN1D" required>
+        </div>
+
+        <div class="field">
+          <div class="field-label-row">
+            <label for="modelParamsInput">Parametri costruttore (JSON)</label>
+            <span class="auto-badge" id="modelParamsBadge">auto-rilevato</span>
+          </div>
+          <textarea id="modelParamsInput" name="model_params" rows="6"
+            placeholder='{"input_channels": 122, "hidden_channels": 512, "num_layers": 4}'>{}</textarea>
+          <div class="hint" id="paramsHint">Argomenti passati a <code>ModelClass(**model_params)</code></div>
+        </div>
+      </div>
+
+      <!-- Card 2: Weights -->
+      <div class="card">
+        <div class="card-header">
+          <div class="step-badge">2</div>
+          <h2>Pesi Pre-addestrati <span class="optional">opzionale</span></h2>
+        </div>
+
+        <div class="field">
+          <div class="field-label-row"><label>File pesi (.pth)</label></div>
+          <div class="file-upload">
+            <label class="file-btn" for="weightsInput">Scegli file</label>
+            <input type="file" id="weightsInput" name="weights" accept=".pth">
+            <span class="file-name" id="weightsName">Nessun file selezionato</span>
+          </div>
+          <div class="hint">Se omesso il modello parte da pesi casuali</div>
+        </div>
+      </div>
+
+      <!-- Card 3: Dataset (full width) -->
+      <div class="card">
+        <div class="card-header">
+          <div class="step-badge">3</div>
+          <h2>Dataset &amp; Training</h2>
+        </div>
+
+        <div class="field">
+          <div class="field-label-row"><label>Dataset (.csv)</label></div>
+          <div class="file-upload">
+            <label class="file-btn" for="datasetInput">Scegli file</label>
+            <input type="file" id="datasetInput" name="dataset" accept=".csv">
+            <span class="file-name" id="datasetName">Nessun file selezionato</span>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="field-label-row"><label>Colonna target (label)</label></div>
+          <select name="label_column" id="labelSelect" required disabled>
+            <option value="">— carica prima il CSV —</option>
+          </select>
+          <div class="hint">Carica il CSV per vedere le colonne disponibili</div>
+        </div>
+
+        <div class="field early-stopping-row">
+          <div class="early-stopping-fields">
+            <div>
+              <div class="field-label-row"><label>Patience</label></div>
+              <input type="number" name="patience" value="10" min="1" max="10000" required>
+              <div class="hint">Epoche senza miglioramento prima di fermarsi</div>
+            </div>
+            <div>
+              <div class="field-label-row"><label>Max epoche</label></div>
+              <input type="number" name="max_epochs" value="500" min="1" max="100000" required>
+              <div class="hint">Limite superiore di sicurezza</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /grid -->
+
+    <div class="submit-row">
+      <button type="submit" id="submitBtn">Avvia Training</button>
+    </div>
+  </form>
+
+  <div id="result" class="result hidden"></div>
+</main>
+
+<script>
+// ---------------------------------------------------------------------------
+// Python file parser — extracts classes and __init__ params entirely in-browser
+// ---------------------------------------------------------------------------
+
+function parsePythonFile(src) {
+  // Returns: [ { name: 'ClassName', params: { key: value, ... } }, ... ]
+  const classes = [];
+  const classRe = /^class\s+(\w+)/gm;
+  let cm;
+  while ((cm = classRe.exec(src)) !== null) {
+    classes.push({ name: cm[1], offset: cm.index });
+  }
+
+  return classes.map(cls => ({
+    name: cls.name,
+    params: extractInitParams(src, cls.offset),
+  }));
+}
+
+function extractInitParams(src, fromOffset) {
+  // Find the next `def __init__(` after fromOffset
+  const marker = 'def __init__(';
+  const start = src.indexOf(marker, fromOffset);
+  if (start === -1) return {};
+
+  // Walk forward from the opening paren, counting depth
+  const parenOpen = start + marker.length - 1; // position of '('
+  let depth = 1;
+  let i = parenOpen + 1;
+  while (i < src.length && depth > 0) {
+    if (src[i] === '(') depth++;
+    else if (src[i] === ')') depth--;
+    i++;
+  }
+  const paramStr = src.slice(parenOpen + 1, i - 1);
+  return parseParamString(paramStr);
+}
+
+function parseParamString(paramStr) {
+  // Remove inline comments and split by comma (respecting nested brackets)
+  const parts = splitByComma(paramStr);
+  const result = {};
+
+  for (const raw of parts) {
+    // Strip inline comments
+    const p = raw.replace(/#[^\n]*/g, '').trim();
+    if (!p) continue;
+    if (p === 'self') continue;
+    if (p.startsWith('**') || p.startsWith('*')) continue;
+
+    const parsed = parseOneParam(p);
+    if (parsed) result[parsed.name] = parsed.value;
+  }
+  return result;
+}
+
+function splitByComma(str) {
+  // Split by ',' but ignore commas inside brackets/parens/braces
+  const parts = [];
+  let depth = 0, cur = '';
+  for (const ch of str) {
+    if ('([{'.includes(ch)) depth++;
+    else if (')]}'.includes(ch)) depth--;
+    else if (ch === ',' && depth === 0) { parts.push(cur); cur = ''; continue; }
+    cur += ch;
+  }
+  if (cur.trim()) parts.push(cur);
+  return parts;
+}
+
+function parseOneParam(p) {
+  // Possible forms:
+  //   name: type = default
+  //   name = default
+  //   name: type
+  //   name
+
+  // Find '=' that is not part of a type annotation comparison
+  let eqIdx = -1;
+  let depth = 0;
+  for (let i = 0; i < p.length; i++) {
+    if ('([{'.includes(p[i])) depth++;
+    else if (')]}'.includes(p[i])) depth--;
+    else if (p[i] === '=' && depth === 0 && p[i - 1] !== '!' && p[i + 1] !== '=') {
+      eqIdx = i; break;
+    }
+  }
+
+  let name, typeAnnotation = null, defaultRaw = null;
+
+  if (eqIdx !== -1) {
+    const before = p.slice(0, eqIdx).trim();
+    defaultRaw = p.slice(eqIdx + 1).trim();
+    const colonIdx = before.indexOf(':');
+    if (colonIdx !== -1) {
+      name = before.slice(0, colonIdx).trim();
+      typeAnnotation = before.slice(colonIdx + 1).trim();
+    } else {
+      name = before;
+    }
+  } else {
+    const colonIdx = p.indexOf(':');
+    if (colonIdx !== -1) {
+      name = p.slice(0, colonIdx).trim();
+      typeAnnotation = p.slice(colonIdx + 1).trim();
+    } else {
+      name = p;
+    }
+  }
+
+  if (!name || !name.match(/^\w+$/)) return null;
+
+  const value = defaultRaw !== null
+    ? pyToJs(defaultRaw)
+    : inferFromType(typeAnnotation);
+
+  return { name, value };
+}
+
+function pyToJs(val) {
+  val = val.trim();
+  if (val === 'True')  return true;
+  if (val === 'False') return false;
+  if (val === 'None')  return null;
+  const n = Number(val);
+  if (!isNaN(n) && val !== '') return n;
+  // String literal
+  if (/^(['"]).*\1$/.test(val)) return val.slice(1, -1);
+  return val; // keep as-is (e.g. an expression — rare in constructors)
+}
+
+function inferFromType(typeStr) {
+  if (!typeStr) return null;
+  const t = typeStr.replace(/\s/g, '').toLowerCase();
+  if (t === 'int')   return 0;
+  if (t === 'float') return 0.0;
+  if (t === 'bool')  return false;
+  if (t === 'str')   return '';
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// UI wiring
+// ---------------------------------------------------------------------------
+
+// Keep track of detected classes so the picker can rebuild params on change
+let detectedClasses = [];
+
+document.getElementById('modelScriptInput').addEventListener('change', function () {
+  const file = this.files[0];
+  const nameEl = document.getElementById('modelScriptName');
+
+  if (!file) {
+    nameEl.textContent = 'Nessun file selezionato';
+    nameEl.classList.remove('loaded');
+    resetModelFields();
+    return;
+  }
+
+  nameEl.textContent = file.name;
+  nameEl.classList.add('loaded');
+
+  const reader = new FileReader();
+  reader.onload = ev => applyParsedClasses(parsePythonFile(ev.target.result));
+  reader.readAsText(file);
+});
+
+function applyParsedClasses(classes) {
+  detectedClasses = classes;
+  const picker   = document.getElementById('classPicker');
+  const pickerSel= document.getElementById('classPickerSelect');
+  const nameInput= document.getElementById('classNameInput');
+  const nameBadge= document.getElementById('classNameBadge');
+  const paramsTA = document.getElementById('modelParamsInput');
+  const paramsBadge = document.getElementById('modelParamsBadge');
+  const hint     = document.getElementById('paramsHint');
+
+  if (classes.length === 0) {
+    // Nothing detected — clear and let user type manually
+    resetModelFields();
+    return;
+  }
+
+  if (classes.length > 1) {
+    // Show picker
+    pickerSel.innerHTML = classes.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+    picker.classList.add('visible');
+    pickerSel.onchange = () => fillFromClass(pickerSel.value);
+  } else {
+    picker.classList.remove('visible');
+  }
+
+  // Fill with first (or only) class
+  fillFromClass(classes[0].name);
+
+  function fillFromClass(className) {
+    const cls = detectedClasses.find(c => c.name === className);
+    if (!cls) return;
+
+    nameInput.value = cls.name;
+    nameInput.classList.add('autofilled');
+    nameBadge.classList.add('visible');
+
+    const json = JSON.stringify(cls.params, null, 2);
+    paramsTA.value = json;
+    paramsTA.classList.add('autofilled');
+    paramsBadge.classList.add('visible');
+
+    // Warn if any required param was set to 0/null (needs user attention)
+    const hasPlaceholders = Object.values(cls.params).some(v => v === 0 || v === null || v === '');
+    hint.className = hasPlaceholders ? 'hint warn' : 'hint';
+    hint.innerHTML = hasPlaceholders
+      ? 'Verifica i valori a <strong>0</strong> o <strong>null</strong>: sono parametri obbligatori senza default.'
+      : 'Argomenti passati a <code>ModelClass(**model_params)</code>';
+  }
+}
+
+function resetModelFields() {
+  document.getElementById('classPicker').classList.remove('visible');
+  const nameInput = document.getElementById('classNameInput');
+  nameInput.value = '';
+  nameInput.classList.remove('autofilled');
+  document.getElementById('classNameBadge').classList.remove('visible');
+  const ta = document.getElementById('modelParamsInput');
+  ta.value = '{}';
+  ta.classList.remove('autofilled');
+  document.getElementById('modelParamsBadge').classList.remove('visible');
+  document.getElementById('paramsHint').className = 'hint';
+  document.getElementById('paramsHint').innerHTML = 'Argomenti passati a <code>ModelClass(**model_params)</code>';
+}
+
+// When user manually edits the autofilled fields, remove the badge + highlight
+['classNameInput', 'modelParamsInput'].forEach(id => {
+  document.getElementById(id).addEventListener('input', function () {
+    this.classList.remove('autofilled');
+    // Remove badge tied to this field
+    const badge = id === 'classNameInput' ? 'classNameBadge' : 'modelParamsBadge';
+    document.getElementById(badge).classList.remove('visible');
+  });
+});
+
+// File display helpers
+function bindFileLabel(inputId, nameId) {
+  const input = document.getElementById(inputId);
+  const nameEl = document.getElementById(nameId);
+  input.addEventListener('change', function () {
+    if (this.files[0]) {
+      nameEl.textContent = this.files[0].name;
+      nameEl.classList.add('loaded');
+    } else {
+      nameEl.textContent = 'Nessun file selezionato';
+      nameEl.classList.remove('loaded');
+    }
+  });
+}
+bindFileLabel('weightsInput', 'weightsName');
+bindFileLabel('datasetInput', 'datasetName');
+
+// CSV column detection
+document.getElementById('datasetInput').addEventListener('change', function () {
+  const file = this.files[0];
+  const select = document.getElementById('labelSelect');
+
+  if (!file) {
+    select.innerHTML = '<option value="">— carica prima il CSV —</option>';
+    select.disabled = true;
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const firstLine = ev.target.result.split(/\r?\n/)[0];
+    const cols = firstLine.match(/(".*?"|[^,]+)/g)
+      ?.map(c => c.replace(/^"|"$/g, '').trim())
+      ?? firstLine.split(',').map(c => c.trim());
+
+    if (!cols.length) return;
+    select.innerHTML = cols.map(c =>
+      `<option value="${c.replace(/"/g, '&quot;')}">${c}</option>`
+    ).join('');
+    select.disabled = false;
+    select.selectedIndex = cols.length - 1; // default to last column
+  };
+  reader.readAsText(file);
+});
+
+// ---------------------------------------------------------------------------
+// Form submission
+// ---------------------------------------------------------------------------
+
+function isValidJSON(s) { try { JSON.parse(s); return true; } catch { return false; } }
+
+document.getElementById('jobForm').addEventListener('submit', async function (e) {
+  e.preventDefault();
+
+  const btn    = document.getElementById('submitBtn');
+  const result = document.getElementById('result');
+
+  const modelScript = document.getElementById('modelScriptInput').files[0];
+  const dataset     = document.getElementById('datasetInput').files[0];
+  const className   = document.getElementById('classNameInput').value.trim();
+  const paramsRaw   = document.getElementById('modelParamsInput').value.trim();
+  const labelColumn = document.getElementById('labelSelect').value;
+  const patience    = parseInt(document.querySelector('[name=patience]').value, 10);
+  const maxEpochs   = parseInt(document.querySelector('[name=max_epochs]').value, 10);
+
+  if (!modelScript)            { showError(result, 'Seleziona uno script Python (.py)'); return; }
+  if (!dataset)                { showError(result, 'Seleziona un dataset (.csv)'); return; }
+  if (!className)              { showError(result, 'Inserisci il nome della classe del modello'); return; }
+  if (!isValidJSON(paramsRaw)) { showError(result, 'I parametri costruttore non sono JSON valido'); return; }
+  if (!labelColumn)            { showError(result, 'Seleziona la colonna label dal CSV'); return; }
+  if (!(patience > 0))         { showError(result, 'Patience deve essere almeno 1'); return; }
+  if (!(maxEpochs > 0))        { showError(result, 'Max epoche deve essere almeno 1'); return; }
+  if (patience > maxEpochs)    { showError(result, 'Patience non può essere maggiore di Max epoche'); return; }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Invio in corso…';
+  result.className = 'result hidden';
+
+  try {
+    const response = await fetch('/api/submit', { method: 'POST', body: new FormData(this) });
+    const data = await response.json();
+
+    if (response.ok) {
+      result.className = 'result success';
+      result.innerHTML =
+        `<strong>Job avviato con successo!</strong><br>` +
+        `Job ID: <code>${data.job_id}</code>&nbsp; Stato: <code>${data.status}</code>`;
+    } else {
+      showError(result, data.detail ?? 'Errore sconosciuto dal server');
+    }
+  } catch (err) {
+    showError(result, `Errore di rete: ${err.message}`);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Avvia Training';
+  }
+});
+
+function showError(el, msg) {
+  el.className = 'result error';
+  el.textContent = `Errore: ${msg}`;
+}
+</script>
+
+</body>
+</html>
