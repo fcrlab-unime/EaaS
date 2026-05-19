@@ -95,6 +95,7 @@ def train(
     val_ratio=0.15,
     min_delta=0.0,
     lr=1e-3,
+    progress_callback=None,
 ):
     """
     Trains model with early stopping on validation MSE.
@@ -115,9 +116,10 @@ def train(
         df, label_column, train_ratio, val_ratio, seed
     )
 
-    print(
-        f"Split → train: {len(train_ds)} | val: {len(val_ds)} | test: {len(test_ds)} samples"
-    )
+    split_msg = f"Split → train: {len(train_ds)} | val: {len(val_ds)} | test: {len(test_ds)} samples"
+    print(split_msg)
+    if progress_callback:
+        progress_callback({"type": "log", "message": split_msg})
 
     train_loader = DataLoader(train_ds, batch_size=32, shuffle=True)
     val_loader   = DataLoader(val_ds,   batch_size=32)
@@ -133,7 +135,10 @@ def train(
     best_state    = copy.deepcopy(model.state_dict())
     no_improve    = 0
 
-    print(f"patience={patience} | max_epochs={max_epochs}")
+    setup_msg = f"patience={patience} | max_epochs={max_epochs} | lr={lr}"
+    print(setup_msg)
+    if progress_callback:
+        progress_callback({"type": "log", "message": setup_msg})
 
     for epoch in range(max_epochs):
         # --- train ---
@@ -158,21 +163,35 @@ def train(
         avg_train = train_loss / len(train_loader)
         avg_val   = val_loss   / len(val_loader)
 
-        print(
-            f"Epoch {epoch+1}/{max_epochs} | "
-            f"Train: {avg_train:.4f} | Val: {avg_val:.4f} | "
-            f"no_improve: {no_improve}/{patience}"
-        )
-
         if avg_val < best_val_loss - min_delta:
             best_val_loss = avg_val
             best_state    = copy.deepcopy(model.state_dict())
             no_improve    = 0
         else:
             no_improve += 1
-            if no_improve >= patience:
-                print(f"Early stopping at epoch {epoch+1}. Best val loss: {best_val_loss:.4f}")
-                break
+
+        print(
+            f"Epoch {epoch+1}/{max_epochs} | "
+            f"Train: {avg_train:.4f} | Val: {avg_val:.4f} | "
+            f"no_improve: {no_improve}/{patience}"
+        )
+        if progress_callback:
+            progress_callback({
+                "type": "epoch",
+                "epoch": epoch + 1,
+                "max_epochs": max_epochs,
+                "train_loss": round(avg_train, 6),
+                "val_loss": round(avg_val, 6),
+                "no_improve": no_improve,
+                "patience": patience,
+            })
+
+        if no_improve >= patience:
+            msg = f"Early stopping a epoch {epoch+1}. Best val loss: {best_val_loss:.4f}"
+            print(msg)
+            if progress_callback:
+                progress_callback({"type": "log", "message": msg})
+            break
 
     # Restore best checkpoint
     model.load_state_dict(best_state)
@@ -187,9 +206,12 @@ def train(
             all_targets.extend(ty.numpy())
 
     metrics = _compute_metrics(np.array(all_targets), np.array(all_preds))
-    print(
-        f"Test set → MAE: {metrics['mae']:.4f} | "
+    test_msg = (
+        f"Test → MAE: {metrics['mae']:.4f} | "
         f"RMSE: {metrics['rmse']:.4f} | R²: {metrics['r2']:.4f}"
     )
+    print(test_msg)
+    if progress_callback:
+        progress_callback({"type": "log", "message": test_msg})
 
     return model, metrics, split_dfs
