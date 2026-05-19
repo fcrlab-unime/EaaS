@@ -1,0 +1,20 @@
+services:
+  export:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: export-service
+    restart: unless-stopped
+    env_file:
+      - .env
+
+    volumes:
+      - /app/downloads
+    networks:
+      - eaas-network
+
+
+networks:
+  eaas-network:
+    driver: bridge
