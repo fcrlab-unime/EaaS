@@ -220,6 +220,174 @@
       grid-template-columns: 1fr 1fr;
       gap: 16px;
     }
+
+    /* -----------------------------------------------------------------------
+       Progress panel
+    ----------------------------------------------------------------------- */
+    .progress-panel {
+      margin-top: 32px;
+    }
+
+    .progress-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 22px;
+      flex-wrap: wrap;
+    }
+    .progress-title { font-size: 1rem; font-weight: 600; }
+    .progress-job   { font-size: 0.85rem; color: #666; }
+    .progress-badge {
+      margin-left: auto;
+      padding: 3px 12px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      background: #fef3c7;
+      color: #b45309;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .progress-badge.running { background: #dbeafe; color: #1d4ed8; }
+    .progress-badge.done    { background: #d1fae5; color: #065f46; }
+    .progress-badge.error   { background: #fee2e2; color: #991b1b; }
+
+    /* Stepper */
+    .stepper {
+      display: flex;
+      align-items: flex-start;
+      margin-bottom: 22px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .step-icon {
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.78rem;
+      font-weight: 700;
+      border: 2px solid #dde1e7;
+      background: #fff;
+      color: #bbb;
+      transition: background 0.25s, border-color 0.25s, color 0.25s;
+    }
+    .step.completed .step-icon {
+      background: #1a1a2e;
+      border-color: #1a1a2e;
+      color: #fff;
+    }
+    .step.active .step-icon {
+      background: #4361ee;
+      border-color: #4361ee;
+      color: #fff;
+      animation: stepPulse 2s ease-in-out infinite;
+    }
+    @keyframes stepPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(67,97,238,.35); }
+      50%       { box-shadow: 0 0 0 7px rgba(67,97,238,0); }
+    }
+    .step-name {
+      font-size: 0.7rem;
+      color: #bbb;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .step.completed .step-name { color: #1a1a2e; font-weight: 600; }
+    .step.active    .step-name { color: #4361ee; font-weight: 700; }
+    .step-line {
+      flex: 1;
+      height: 2px;
+      background: #dde1e7;
+      margin: 0 6px;
+      margin-bottom: 22px;
+      min-width: 24px;
+      transition: background 0.25s;
+    }
+    .step-line.completed { background: #1a1a2e; }
+
+    /* Epoch progress bar */
+    .epoch-progress {
+      margin-bottom: 14px;
+    }
+    .epoch-header {
+      display: flex;
+      gap: 16px;
+      font-size: 0.83rem;
+      color: #555;
+      margin-bottom: 7px;
+      flex-wrap: wrap;
+      align-items: baseline;
+    }
+    .epoch-header strong { color: #1a1a2e; }
+    .epoch-no-improve { color: #b45309; font-size: 0.78rem; }
+    .epoch-bar-track {
+      height: 7px;
+      background: #eef0f4;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .epoch-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #4361ee, #7c86f7);
+      border-radius: 4px;
+      transition: width 0.4s ease;
+      width: 0%;
+    }
+
+    /* Log console */
+    .log-console {
+      background: #0d1117;
+      border-radius: 10px;
+      padding: 12px 14px;
+      height: 210px;
+      overflow-y: auto;
+      font-family: "SF Mono", "Fira Code", "Courier New", monospace;
+      font-size: 0.77rem;
+      line-height: 1.65;
+      margin-bottom: 14px;
+    }
+    .log-console::-webkit-scrollbar { width: 6px; }
+    .log-console::-webkit-scrollbar-track { background: transparent; }
+    .log-console::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+    .log-line       { color: #8b949e; word-break: break-all; }
+    .log-line.epoch { color: #58a6ff; }
+    .log-line.stage { color: #3fb950; }
+    .log-line.error { color: #ff7b72; }
+
+    /* Metrics grid */
+    .metrics-block { }
+    .metrics-title {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #555;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+    }
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+    @media (max-width: 520px) { .metrics-grid { grid-template-columns: 1fr 1fr; } }
+    .metric-card {
+      background: #f5f7fa;
+      border: 1.5px solid #eef0f4;
+      border-radius: 10px;
+      padding: 14px 10px;
+      text-align: center;
+    }
+    .metric-name  { font-size: 0.7rem; color: #999; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .metric-value { font-size: 1.15rem; font-weight: 700; color: #1a1a2e; }
   </style>
 </head>
 <body>
@@ -340,6 +508,61 @@
   </form>
 
   <div id="result" class="result hidden"></div>
+
+  <!-- Progress panel — shown after job submission -->
+  <div id="progressPanel" class="card progress-panel hidden">
+    <div class="progress-header">
+      <span class="progress-title">Progresso Pipeline</span>
+      <span class="progress-job">Job: <code id="progressJobId"></code></span>
+      <span class="progress-badge" id="progressBadge">In attesa</span>
+    </div>
+
+    <div class="stepper" id="stepper">
+      <div class="step completed" data-step="submitted">
+        <div class="step-icon" data-num="✓">✓</div>
+        <div class="step-name">Sottomesso</div>
+      </div>
+      <div class="step-line" id="line-0"></div>
+      <div class="step" data-step="training">
+        <div class="step-icon" data-num="2">2</div>
+        <div class="step-name">Training</div>
+      </div>
+      <div class="step-line" id="line-1"></div>
+      <div class="step" data-step="quantization">
+        <div class="step-icon" data-num="3">3</div>
+        <div class="step-name">Quantizzazione</div>
+      </div>
+      <div class="step-line" id="line-2"></div>
+      <div class="step" data-step="export">
+        <div class="step-icon" data-num="4">4</div>
+        <div class="step-name">Export C++</div>
+      </div>
+      <div class="step-line" id="line-3"></div>
+      <div class="step" data-step="done">
+        <div class="step-icon" data-num="✓">✓</div>
+        <div class="step-name">Fine</div>
+      </div>
+    </div>
+
+    <div id="epochProgress" class="epoch-progress hidden">
+      <div class="epoch-header">
+        <span id="epochText"><strong>Epoch 0</strong> / 0</span>
+        <span id="epochLoss">Train: — &nbsp;|&nbsp; Val: —</span>
+        <span id="epochNoImprove" class="epoch-no-improve"></span>
+      </div>
+      <div class="epoch-bar-track">
+        <div class="epoch-bar-fill" id="epochBarFill"></div>
+      </div>
+    </div>
+
+    <div id="logConsole" class="log-console"></div>
+
+    <div id="metricsBlock" class="metrics-block hidden">
+      <div class="metrics-title">Test Set Metrics</div>
+      <div class="metrics-grid" id="metricsGrid"></div>
+    </div>
+  </div>
+
 </main>
 
 <script>
@@ -669,8 +892,9 @@ document.getElementById('jobForm').addEventListener('submit', async function (e)
     if (response.ok) {
       result.className = 'result success';
       result.innerHTML =
-        `<strong>Job avviato con successo!</strong><br>` +
-        `Job ID: <code>${data.job_id}</code>&nbsp; Stato: <code>${data.status}</code>`;
+        `<strong>Job avviato con successo!</strong>&nbsp; ` +
+        `ID: <code>${data.job_id}</code>`;
+      startProgress(data.job_id);
     } else {
       showError(result, data.detail ?? 'Errore sconosciuto dal server');
     }
@@ -685,6 +909,153 @@ document.getElementById('jobForm').addEventListener('submit', async function (e)
 function showError(el, msg) {
   el.className = 'result error';
   el.textContent = `Errore: ${msg}`;
+}
+
+// ---------------------------------------------------------------------------
+// Pipeline progress — SSE client
+// ---------------------------------------------------------------------------
+
+const STAGE_ORDER = ['submitted', 'training', 'quantization', 'export', 'done'];
+let _sse = null;
+let _capturedMetrics = null;
+
+function startProgress(jobId) {
+  _capturedMetrics = null;
+
+  document.getElementById('progressJobId').textContent = jobId;
+  document.getElementById('progressBadge').textContent = 'In attesa';
+  document.getElementById('progressBadge').className = 'progress-badge';
+  document.getElementById('progressPanel').classList.remove('hidden');
+  document.getElementById('epochProgress').classList.add('hidden');
+  document.getElementById('metricsBlock').classList.add('hidden');
+  document.getElementById('logConsole').innerHTML = '';
+  document.getElementById('epochBarFill').style.width = '0%';
+
+  _setStepper('submitted');
+
+  if (_sse) { _sse.close(); }
+  _sse = new EventSource(`/api/progress/${jobId}`);
+  _sse.onmessage = (e) => _handleEvent(JSON.parse(e.data));
+  _sse.onerror = () => {
+    if (document.getElementById('progressBadge').className.indexOf('done') === -1) {
+      _appendLog({ type: 'error', message: 'Connessione al server interrotta.' });
+    }
+  };
+}
+
+function _handleEvent(ev) {
+  const { type, stage, message, data } = ev;
+
+  if (stage) _setStepper(stage);
+
+  if (type === 'epoch') {
+    const d = data || ev;
+    document.getElementById('epochProgress').classList.remove('hidden');
+    document.getElementById('epochText').innerHTML = `<strong>Epoch ${d.epoch}</strong> / ${d.max_epochs}`;
+    document.getElementById('epochLoss').textContent = `Train: ${d.train_loss.toFixed(4)}  |  Val: ${d.val_loss.toFixed(4)}`;
+    const noImp = document.getElementById('epochNoImprove');
+    if (d.no_improve > 0) {
+      noImp.textContent = `no_improve: ${d.no_improve}/${d.patience}`;
+      noImp.style.display = 'inline';
+    } else {
+      noImp.style.display = 'none';
+    }
+    document.getElementById('epochBarFill').style.width = `${(d.epoch / d.max_epochs * 100).toFixed(1)}%`;
+  }
+
+  if (type === 'stage' && data && data.metrics) {
+    _capturedMetrics = data.metrics;
+  }
+
+  if (stage === 'quantization' || stage === 'export') {
+    document.getElementById('epochProgress').classList.add('hidden');
+  }
+
+  if (type === 'done') {
+    document.getElementById('epochProgress').classList.add('hidden');
+    if (_capturedMetrics) _showMetrics(_capturedMetrics);
+    if (data && data.export_archive) {
+      _appendLog({ type: 'log', message: `Archivio export: exports/${data.export_archive}` });
+    }
+    if (_sse) { _sse.close(); }
+  }
+
+  if (type === 'error') {
+    document.getElementById('progressBadge').textContent = 'Errore';
+    document.getElementById('progressBadge').className = 'progress-badge error';
+    if (_sse) { _sse.close(); }
+  }
+
+  _appendLog(ev);
+}
+
+function _setStepper(stage) {
+  const idx = STAGE_ORDER.indexOf(stage);
+  if (idx === -1) return;
+
+  const badge = document.getElementById('progressBadge');
+  if (stage === 'done') {
+    badge.textContent = 'Completato';
+    badge.className = 'progress-badge done';
+  } else {
+    const labels = { submitted: 'In attesa', training: 'Training', quantization: 'Quantizzazione', export: 'Export' };
+    badge.textContent = labels[stage] || stage;
+    badge.className = 'progress-badge running';
+  }
+
+  document.querySelectorAll('#stepper .step').forEach((el, i) => {
+    el.classList.remove('completed', 'active');
+    const icon = el.querySelector('.step-icon');
+    if (i < idx) {
+      el.classList.add('completed');
+      icon.textContent = '✓';
+    } else if (i === idx) {
+      el.classList.add('active');
+      icon.textContent = icon.dataset.num;
+    } else {
+      icon.textContent = icon.dataset.num;
+    }
+  });
+
+  document.querySelectorAll('#stepper .step-line').forEach((el, i) => {
+    el.classList.toggle('completed', i < idx);
+  });
+}
+
+function _appendLog(ev) {
+  const { type, message } = ev;
+  if (!message) return;
+
+  const console_ = document.getElementById('logConsole');
+  const ts = new Date().toLocaleTimeString('it-IT', { hour12: false });
+  const line = document.createElement('div');
+
+  let cls = '';
+  if (type === 'epoch') cls = 'epoch';
+  else if (type === 'stage') cls = 'stage';
+  else if (type === 'error') cls = 'error';
+
+  line.className = `log-line${cls ? ' ' + cls : ''}`;
+  line.textContent = `[${ts}] ${message}`;
+  console_.appendChild(line);
+
+  const distFromBottom = console_.scrollHeight - console_.scrollTop - console_.clientHeight;
+  if (distFromBottom < 60) console_.scrollTop = console_.scrollHeight;
+}
+
+function _showMetrics(metrics) {
+  const grid = document.getElementById('metricsGrid');
+  grid.innerHTML = [
+    ['MAE',  metrics.mae],
+    ['MSE',  metrics.mse],
+    ['RMSE', metrics.rmse],
+    ['R²',   metrics.r2],
+  ].map(([name, val]) => `
+    <div class="metric-card">
+      <div class="metric-name">${name}</div>
+      <div class="metric-value">${typeof val === 'number' ? val.toFixed(4) : val}</div>
+    </div>`).join('');
+  document.getElementById('metricsBlock').classList.remove('hidden');
 }
 </script>
 
