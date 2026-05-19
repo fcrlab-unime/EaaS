@@ -1,19 +1,12 @@
-import aidge_core.export_utils
 import numpy as np
 import pandas as pd
-import joblib
-from sklearn.metrics import r2_score
 import aidge_core
-from aidge_core.mem_info import *
-from aidge_core.export_utils import *
 import aidge_core.aidge_save
-
 import aidge_onnx
 import aidge_backend_cpu
 import aidge_quantization
-
 import onnx
-from onnx import helper, TensorProto
+from aidge_export_cpp.export_utils import propagate
 
 
 class PipelineConfig:
@@ -66,8 +59,17 @@ class PipelineConfig:
             aidge_core.dtype.int32
         )
         
+        scheduler = aidge_core.SequentialScheduler(aidge_model)
+        scheduler.generate_scheduling()
+
+        for tensor in calibration_set:
+            propagate(aidge_model, scheduler, [tensor])
+
         aidge_quantization.auto_assign_node_precision(
-            aidge_model, weight_precision, activation_precision, bias_precision
+            graphview=aidge_model,
+            act_precision=activation_precision,
+            weight_precision=weight_precision,
+            bias_precision=bias_precision,
         )
         
         aidge_quantization.quantize_network(

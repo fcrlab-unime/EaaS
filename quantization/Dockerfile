@@ -23,7 +23,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # NOTA: Usiamo --depth 1 per clonare solo l'ultimo commit e risparmiare spazio
 RUN git clone --depth 1 https://gitlab.eclipse.org/eclipse/aidge/aidge.git \
     && cd aidge \
-    && ./setup.sh -m aidge_core -m aidge_backend_cpu -m aidge_onnx -m aidge_quantization 
+    && ./setup.sh -m aidge_core -m aidge_backend_cpu -m aidge_onnx -m aidge_quantization -m export_cpp
     
 
 # 5. Copia del codice sorgente
