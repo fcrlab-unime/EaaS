@@ -6,6 +6,7 @@ include:
   - kafka/kafka_compose.yaml
   - training/train_compose.yaml
   - quantization/quant_compose.yml
+  - export/export_compose.yml
   - frontend/frontend_compose.yml
 
 
