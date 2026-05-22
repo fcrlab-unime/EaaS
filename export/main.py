@@ -116,8 +116,8 @@ def handle_job(job: dict):
         )
         logger.info(f"Notifica export inviata per Job {job_id}")
         send_progress(
-            job_id, "done", "done",
-            "Pipeline completata con successo!",
+            job_id, "stage", "export",
+            "Export C++ completato. Avvio flash...",
             data={"export_archive": minio_dest},
         )
 
