@@ -1,0 +1,26 @@
+# docker-compose.flash.yml
+services:
+  flash-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: eaas-flash
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      IDF_TARGET: ${IDF_TARGET:-esp32}
+      FLASH_PORT: ${FLASH_PORT:-/dev/ttyUSB0}
+      FLASH_BAUD: ${FLASH_BAUD:-460800}
+      SERIAL_READ_SECS: ${SERIAL_READ_SECS:-8}
+      KAFKA_TOPIC_IN: ${FLASH_KAFKA_TOPIC_IN:-export-done}
+      KAFKA_TOPIC_OUT: ${FLASH_KAFKA_TOPIC_OUT:-flash-done}
+      KAFKA_GROUP_ID: flash-service
+    devices:
+      - "/dev/ttyUSB0:/dev/ttyUSB0"
+    networks:
+      - eaas-network
+
+networks:
+  eaas-network:
+    driver: bridge
