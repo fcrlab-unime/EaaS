@@ -14,13 +14,21 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from minio import Minio
 from minio.error import S3Error
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+
 app = FastAPI(title="EaaS Frontend")
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
+
 
 # ---------------------------------------------------------------------------
 # Per-job progress state (in-memory)
@@ -69,6 +77,9 @@ async def _kafka_progress_listener():
 async def _startup():
     asyncio.create_task(_kafka_progress_listener())
 
+@app.get("/")
+async def root(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
 
 # ---------------------------------------------------------------------------
 # MinIO / Kafka helpers
@@ -201,4 +212,3 @@ async def job_progress(job_id: str, request: Request):
     )
 
 
-app.mount("/", StaticFiles(directory="static", html=True), name="static")

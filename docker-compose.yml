@@ -8,6 +8,7 @@ include:
   - quantization/quant_compose.yml
   - export/export_compose.yml
   - frontend/frontend_compose.yml
+  - flash/flash_compose.yml
 
 
 networks:
