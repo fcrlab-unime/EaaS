@@ -8,7 +8,7 @@ load_dotenv()
 class MinioManager:
     def __init__(self):
         
-        self.endpoint = os.getenv("MINIO_ENDPOINT", "localhost:9000")
+        self.endpoint = os.getenv("MINIO_ENDPOINT", "minio:9000")
         self.user = os.getenv("MINIO_ROOT_USER", "minioadmin")
         self.password = os.getenv("MINIO_ROOT_PASSWORD", "minioadmin")
         self.secure = os.getenv("MINIO_SECURE", "False").lower() == "true"

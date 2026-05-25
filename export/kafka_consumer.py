@@ -66,7 +66,7 @@ def delivery_report(err, msg):
 def send_kafka_message(topic: str, message: dict):
     """Funzione helper per inviare messaggi a Kafka (es. per notificare la quantizzazione)"""
     producer = Producer({
-        "bootstrap.servers": os.environ.get("KAFKA_BOOTSTRAP", "localhost:9092"),
+        "bootstrap.servers": os.environ.get("KAFKA_BOOTSTRAP", "redpanda:29092"),
     })
 
     producer.produce(

@@ -4,7 +4,7 @@ import os
 from confluent_kafka import Producer
 
 producer = Producer({
-    "bootstrap.servers": os.environ.get("KAFKA_BOOTSTRAP", "localhost:9092"),
+    "bootstrap.servers": os.environ.get("KAFKA_BOOTSTRAP", "redpanda:29092"),
 })
 
 job = {
