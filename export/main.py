@@ -52,17 +52,17 @@ def send_progress(job_id: str, type_: str, stage: str, message: str, data: dict 
 def _ensure_bucket(client, bucket: str):
     if not client.bucket_exists(bucket):
         client.make_bucket(bucket)
-        logger.info(f"Bucket '{bucket}' creato")
+        logger.info(f"Bucket '{bucket}' created")
 
 
 def handle_job(job: dict):
     """
-    Pipeline di export CPP:
-    1. Download modello quantizzato (.aidge) da MinIO
+    C++ export pipeline:
+    1. Download quantized model (.aidge) from MinIO
     2. Download test split
-    3. Generazione ed compilazione export C++
-    4. Upload archivio tar.gz su MinIO
-    5. Notifica topic done-jobs
+    3. Generate and compile C++ export
+    4. Upload tar.gz archive to MinIO
+    5. Notify export-done topic
     """
     job_id = job["job_id"]
     model_minio_path = job["export_path"]
@@ -73,22 +73,22 @@ def handle_job(job: dict):
     base_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        logger.info(f"Inizio export CPP Job: {job_id}")
-        send_progress(job_id, "stage", "export", "Avvio export C++")
+        logger.info(f"Starting C++ export job: {job_id}")
+        send_progress(job_id, "stage", "export", "Starting C++ export")
 
-        # --- 1. DOWNLOAD MODELLO QUANTIZZATO ---
+        # --- 1. DOWNLOAD QUANTIZED MODEL ---
         model_local = str(base_dir / "model_quant.aidge")
         download(minio, "quantized-models", model_minio_path, model_local)
-        logger.info(f"Modello quantizzato scaricato: {model_local}")
-        send_progress(job_id, "log", "export", "Modello quantizzato scaricato")
+        logger.info(f"Quantized model downloaded: {model_local}")
+        send_progress(job_id, "log", "export", "Quantized model downloaded")
 
         # --- 2. DOWNLOAD SPLIT ---
         split_local = str(base_dir / "data.csv")
         download(minio, "datasets", split_key, split_local)
-        logger.info(f"Split scaricato: datasets/{split_key}")
+        logger.info(f"Split downloaded: datasets/{split_key}")
 
-        # --- 3. EXPORT CPP ---
-        send_progress(job_id, "log", "export", "Generazione codice C++ in corso...")
+        # --- 3. C++ EXPORT ---
+        send_progress(job_id, "log", "export", "Generating C++ code...")
         export_folder = base_dir / "export_cpp"
         pipeline = ExportPipeline(
             model_path=str(base_dir / "model_quant.aidge"),
@@ -96,10 +96,10 @@ def handle_job(job: dict):
             label=label_column,
         )
         pipeline.run(export_folder)
-        logger.info(f"Export CPP completato: {export_folder}")
-        send_progress(job_id, "log", "export", "Codice C++ generato. Compilazione in corso...")
+        logger.info(f"C++ export complete: {export_folder}")
+        send_progress(job_id, "log", "export", "C++ code generated. Compiling...")
 
-        # --- 4. ARCHIVIO E UPLOAD ---
+        # --- 4. ARCHIVE AND UPLOAD ---
         _ensure_bucket(minio, _EXPORT_BUCKET)
         tar_local = str(base_dir / f"export_{job_id}.tar.gz")
         with tarfile.open(tar_local, "w:gz") as tar:
@@ -107,34 +107,34 @@ def handle_job(job: dict):
 
         minio_dest = f"{job_id}/export_cpp.tar.gz"
         upload(minio, _EXPORT_BUCKET, minio_dest, tar_local)
-        logger.info(f"Archivio caricato su MinIO: {_EXPORT_BUCKET}/{minio_dest}")
+        logger.info(f"Archive uploaded to MinIO: {_EXPORT_BUCKET}/{minio_dest}")
 
-        # --- 5. NOTIFICA ---
+        # --- 5. NOTIFY ---
         send_kafka_message(
             os.environ["KAFKA_TOPIC_OUT"],
             {"job_id": job_id, "export_archive": minio_dest},
         )
-        logger.info(f"Notifica export inviata per Job {job_id}")
+        logger.info(f"Export notification sent for job {job_id}")
         send_progress(
             job_id, "stage", "export",
-            "Export C++ completato. Avvio flash...",
+            "C++ export complete. Starting flash...",
             data={"export_archive": minio_dest},
         )
 
     except Exception as e:
-        logger.error(f"Errore critico nel Job {job_id}: {str(e)}", exc_info=True)
-        send_progress(job_id, "error", "export", f"Errore: {str(e)}")
+        logger.error(f"Critical error in job {job_id}: {str(e)}", exc_info=True)
+        send_progress(job_id, "error", "export", f"Error: {str(e)}")
 
     finally:
         if base_dir.exists():
             shutil.rmtree(base_dir)
-            logger.info(f"🧹 Pulizia cartella temporanea completata per {job_id}")
+            logger.info(f"Temporary folder cleaned for {job_id}")
 
 
 consumer = make_consumer(
-    bootstrap=os.environ["KAFKA_BOOTSTRAP"],
-    topic=os.environ["KAFKA_TOPIC_IN"],
-    group_id=os.environ["KAFKA_GROUP_ID"],
+    bootstrap=os.environ["KAFKA_BOOTSTRAP"].strip().strip('"'),
+    topic=os.environ["KAFKA_TOPIC_IN"].strip().strip('"'),
+    group_id=os.environ["KAFKA_GROUP_ID"].strip().strip('"'),
 )
 
 consume_loop(consumer, handle_job)

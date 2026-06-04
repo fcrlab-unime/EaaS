@@ -101,7 +101,7 @@ def _put(client: Minio, bucket: str, key: str, data: bytes, content_type: str = 
 
 
 def _kafka_producer() -> Producer:
-    return Producer({"bootstrap.servers": os.environ.get("KAFKA_BOOTSTRAP", "localhost:9092")})
+    return Producer({"bootstrap.servers": os.environ.get("KAFKA_BOOTSTRAP", "redpanda:29092")})
 
 
 # ---------------------------------------------------------------------------
