@@ -16,7 +16,7 @@ def make_consumer(bootstrap: str, topic: str, group_id: str) -> Consumer:
     for attempt in range(10):
         try:
             consumer.subscribe([topic])
-            # verifica che il broker risponda
+            # verify broker is responsive
             consumer.poll(timeout=2.0)
             return consumer
         except Exception as e:
@@ -29,21 +29,21 @@ def make_consumer(bootstrap: str, topic: str, group_id: str) -> Consumer:
 def consume_loop(consumer: Consumer, handler):
     """
     handler(job: dict) -> None
-    Chiamato per ogni messaggio valido. Commit solo dopo handler completato.
+    Called for each valid message. Commits only after handler completes.
     """
     try:
         while True:
             msg = consumer.poll(timeout=1.0)
             if msg is None:
                 continue
-            print(f"[{time.strftime('%H:%M:%S')}] Messaggio ricevuto!")
-            
+            print(f"[{time.strftime('%H:%M:%S')}] Message received!")
+
             if msg.error():
                 if msg.error().code() == KafkaError._PARTITION_EOF:
                     continue
                 logger.error("Kafka error: %s", msg.error())
                 continue
-            
+
 
             try:
                 job = json.loads(msg.value().decode("utf-8"))
@@ -52,11 +52,11 @@ def consume_loop(consumer: Consumer, handler):
                 consumer.commit(message=msg)
             except Exception as e:
                 logger.exception("Failed to process message: %s", e)
-                # non committa: il messaggio verrà riprocessato
+                # Do not commit: the message will be reprocessed
 
     finally:
         consumer.close()
-        
+
 def delivery_report(err, msg):
     if err:
         print(f"Delivery failed: {err}")
@@ -64,9 +64,9 @@ def delivery_report(err, msg):
         print(f"Delivered to {msg.topic()} [{msg.partition()}] offset {msg.offset()}")
 
 def send_kafka_message(topic: str, message: dict):
-    """Funzione helper per inviare messaggi a Kafka (es. per notificare la quantizzazione)"""
+    """Helper function to send messages to Kafka (e.g. to notify quantization)"""
     producer = Producer({
-        "bootstrap.servers": os.environ.get("KAFKA_BOOTSTRAP", "redpanda:29092"),
+        "bootstrap.servers": os.environ.get("KAFKA_BOOTSTRAP", "redpanda:29092").strip().strip('"'),
     })
 
     producer.produce(
@@ -74,6 +74,5 @@ def send_kafka_message(topic: str, message: dict):
         value=json.dumps(message).encode('utf-8'),
         callback=delivery_report,
     )
-    
+
     producer.flush()
-    

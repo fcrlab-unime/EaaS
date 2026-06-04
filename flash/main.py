@@ -102,7 +102,7 @@ def _create_idf_project(idf_dir: Path, export_dir: Path):
     if data_src.exists():
         shutil.copytree(data_src, main_dir / "data")
 
-    # Patch tutti i sorgenti aidge DOPO la copia
+    # Patch all aidge sources after copy
     _fix_aidge_sources(idf_dir)
 
     # DNN component CMakeLists.txt
@@ -148,7 +148,7 @@ def _read_serial_output(port: str, baud: int = 115200, duration: int = SERIAL_RE
     try:
         import serial
     except ImportError:
-        return "(pyserial non disponibile)"
+        return "(pyserial not available)"
     try:
         ser = serial.Serial(port, baud, timeout=1)
         time.sleep(1.5)
@@ -163,8 +163,8 @@ def _read_serial_output(port: str, baud: int = 115200, duration: int = SERIAL_RE
         ser.close()
         return "\n".join(lines)
     except Exception as e:
-        logger.warning("Lettura seriale fallita: %s", e)
-        return f"(errore lettura seriale: {e})"
+        logger.warning("Serial read failed: %s", e)
+        return f"(serial read error: {e})"
 
 
 # ── Shell helper ────────────────────────────────────────────────────────────
@@ -193,48 +193,48 @@ def handle_job(job: dict):
     base_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        send_progress(job_id, "stage", "flash", "Avvio servizio flash")
+        send_progress(job_id, "stage", "flash", "Starting flash service")
 
         # 1. Download archive
         tar_local = str(base_dir / "export_cpp.tar.gz")
-        send_progress(job_id, "log", "flash", "Download archivio export da MinIO...")
+        send_progress(job_id, "log", "flash", "Downloading export archive from MinIO...")
         download(minio, "exports", archive_path, tar_local)
-        logger.info("Archivio scaricato: %s", tar_local)
+        logger.info("Archive downloaded: %s", tar_local)
 
         # 2. Extract
         with tarfile.open(tar_local, "r:gz") as tar:
             tar.extractall(base_dir)
         export_dir = base_dir / "export_cpp"
-        logger.info("Archivio estratto: %s", export_dir)
+        logger.info("Archive extracted: %s", export_dir)
 
         # 3. Create IDF project
-        send_progress(job_id, "log", "flash", "Creazione progetto ESP-IDF...")
+        send_progress(job_id, "log", "flash", "Creating ESP-IDF project...")
         idf_dir = base_dir / "idf_project"
         _create_idf_project(idf_dir, export_dir)
-        logger.info("Progetto IDF creato: %s", idf_dir)
+        logger.info("IDF project created: %s", idf_dir)
 
         # 4. Build
-        send_progress(job_id, "log", "flash", f"Build per target {IDF_TARGET} (potrebbe richiedere alcuni minuti)...")
+        send_progress(job_id, "log", "flash", f"Building for target {IDF_TARGET} (this may take a few minutes)...")
         build_cmd = f"idf.py set-target {IDF_TARGET} && idf.py build"
         result = _run_shell(build_cmd, idf_dir, timeout=600)
         if result.returncode != 0:
-            logger.error("Build fallita:\n%s\n%s", result.stdout[-3000:], result.stderr[-3000:])
-            raise RuntimeError(f"idf.py build fallito (rc={result.returncode})")
-        logger.info("Build completata")
-        send_progress(job_id, "log", "flash", "Build completata. Flashing in corso...")
+            logger.error("Build failed:\n%s\n%s", result.stdout[-3000:], result.stderr[-3000:])
+            raise RuntimeError(f"idf.py build failed (rc={result.returncode})")
+        logger.info("Build complete")
+        send_progress(job_id, "log", "flash", "Build complete. Flashing...")
 
         # 5. Flash
         flash_cmd = f"idf.py flash -p {FLASH_PORT} -b {FLASH_BAUD}"
         result = _run_shell(flash_cmd, idf_dir, timeout=120)
         if result.returncode != 0:
-            logger.error("Flash fallito:\n%s\n%s", result.stdout[-2000:], result.stderr[-2000:])
-            raise RuntimeError(f"idf.py flash fallito (rc={result.returncode}): {result.stderr[-500:]}")
-        logger.info("Flash completato su %s", FLASH_PORT)
+            logger.error("Flash failed:\n%s\n%s", result.stdout[-2000:], result.stderr[-2000:])
+            raise RuntimeError(f"idf.py flash failed (rc={result.returncode}): {result.stderr[-500:]}")
+        logger.info("Flash complete on %s", FLASH_PORT)
 
-        # 6. Leggi output seriale
-        send_progress(job_id, "log", "flash", f"Lettura output seriale ({SERIAL_READ_SECS}s)...")
+        # 6. Read serial output
+        send_progress(job_id, "log", "flash", f"Reading serial output ({SERIAL_READ_SECS}s)...")
         serial_out = _read_serial_output(FLASH_PORT)
-        logger.info("Output seriale:\n%s", serial_out)
+        logger.info("Serial output:\n%s", serial_out)
 
         # 7. Done
         send_kafka_message(
@@ -243,25 +243,25 @@ def handle_job(job: dict):
         )
         send_progress(
             job_id, "done", "done",
-            f"Firmware flashato con successo su {FLASH_PORT}!",
+            f"Firmware flashed successfully on {FLASH_PORT}!",
             data={"port": FLASH_PORT, "target": IDF_TARGET, "serial_output": serial_out},
         )
-        logger.info("Job %s completato", job_id)
+        logger.info("Job %s completed", job_id)
 
     except Exception as e:
-        logger.error("Errore critico nel job %s: %s", job_id, e, exc_info=True)
-        send_progress(job_id, "error", "flash", f"Errore flash: {e}")
+        logger.error("Critical error in job %s: %s", job_id, e, exc_info=True)
+        send_progress(job_id, "error", "flash", f"Flash error: {e}")
 
     finally:
         if base_dir.exists():
             shutil.rmtree(base_dir)
-            logger.info("Pulizia cartella temporanea completata per %s", job_id)
+            logger.info("Temporary folder cleaned for %s", job_id)
 
 
 consumer = make_consumer(
-    bootstrap=os.environ["KAFKA_BOOTSTRAP"],
-    topic=os.environ["KAFKA_TOPIC_IN"],
-    group_id=os.environ["KAFKA_GROUP_ID"],
+    bootstrap=os.environ["KAFKA_BOOTSTRAP"].strip().strip('"'),
+    topic=os.environ["KAFKA_TOPIC_IN"].strip().strip('"'),
+    group_id=os.environ["KAFKA_GROUP_ID"].strip().strip('"'),
 )
 
 consume_loop(consumer, handle_job)

@@ -427,7 +427,18 @@ button[type="submit"]:disabled { background: #a0aec0; cursor: not-allowed; }
 .log-line.stage { color: #3fb950; }
 .log-line.error { color: #ff7b72; }
 
-/* Metrics grid */
+/* Metrics section — due blocchi affiancati */
+.metrics-section {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.metrics-section > .metrics-block {
+  flex: 1;
+  min-width: 220px;
+}
+
+/* Blocco metriche base */
 .metrics-block { }
 .metrics-title {
   font-size: 0.82rem;
@@ -440,7 +451,7 @@ button[type="submit"]:disabled { background: #a0aec0; cursor: not-allowed; }
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
+  gap: 10px;
 }
 @media (max-width: 520px) { .metrics-grid { grid-template-columns: 1fr 1fr; } }
 .metric-card {
@@ -452,3 +463,22 @@ button[type="submit"]:disabled { background: #a0aec0; cursor: not-allowed; }
 }
 .metric-name  { font-size: 0.7rem; color: #999; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
 .metric-value { font-size: 1.15rem; font-weight: 700; color: #1a1a2e; }
+
+/* Training metrics — accento verde */
+.metrics-block--train {
+  border-top: 3px solid #16a34a;
+  padding-top: 10px;
+}
+.metrics-block--train .metrics-title { color: #15803d; }
+
+/* Post-quantization metrics — accento indigo */
+.metrics-block--quant {
+  border-top: 3px solid #4361ee;
+  padding-top: 10px;
+}
+.metrics-block--quant .metrics-title { color: #4361ee; }
+.metrics-block--quant .metric-card {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+.metrics-block--quant .metric-value { color: #1d4ed8; }

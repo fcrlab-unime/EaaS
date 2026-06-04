@@ -50,12 +50,12 @@ def send_progress(job_id: str, type_: str, stage: str, message: str, data: dict 
 
 def handle_job(job: dict):
     """
-    Pipeline di quantizzazione:
-    1. Download ONNX da MinIO
+    Quantization pipeline:
+    1. Download ONNX from MinIO
     2. Download dataset
-    3. Quantizzazione con Aidge
-    4. Upload modello quantizzato
-    5. Notifica topic exporting_jobs
+    3. Quantize with Aidge
+    4. Upload quantized model
+    5. Notify exporting_jobs topic
     """
     job_id          = job["job_id"]
     train_split_key = job["train_split"]
@@ -66,26 +66,26 @@ def handle_job(job: dict):
     base_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        logger.info(f"Inizio quantizzazione Job: {job_id}")
-        send_progress(job_id, "stage", "quantization", "Avvio quantizzazione ONNX")
+        logger.info(f"Starting quantization job: {job_id}")
+        send_progress(job_id, "stage", "quantization", "Starting ONNX quantization")
 
-        # --- 1. DOWNLOAD ONNX DA MINIO ---
+        # --- 1. DOWNLOAD ONNX FROM MINIO ---
         onnx_local = str(base_dir / "model.onnx")
         download(minio, "onnx", onnx_minio_path, onnx_local)
-        logger.info(f"ONNX scaricato: {onnx_local}")
-        send_progress(job_id, "log", "quantization", "Modello ONNX scaricato")
+        logger.info(f"ONNX downloaded: {onnx_local}")
+        send_progress(job_id, "log", "quantization", "ONNX model downloaded")
 
-        # --- 2. DOWNLOAD TRAIN SPLIT DEL JOB ---
+        # --- 2. DOWNLOAD TRAIN SPLIT ---
         train_local = str(base_dir / "train.csv")
         download(minio, "datasets", train_split_key, train_local)
-        logger.info(f"Train split scaricato: datasets/{train_split_key}")
+        logger.info(f"Train split downloaded: datasets/{train_split_key}")
 
         dataset_df = pd.read_csv(train_local)
         logger.info(f"Train split shape: {dataset_df.shape}")
-        send_progress(job_id, "log", "quantization", f"Dataset calibrazione: {dataset_df.shape[0]} campioni, {dataset_df.shape[1]} colonne")
+        send_progress(job_id, "log", "quantization", f"Calibration dataset: {dataset_df.shape[0]} samples, {dataset_df.shape[1]} columns")
 
-        # --- 3. QUANTIZZAZIONE ---
-        send_progress(job_id, "log", "quantization", "Quantizzazione in corso...")
+        # --- 3. QUANTIZATION ---
+        send_progress(job_id, "log", "quantization", "Quantization in progress...")
         cfg = PipelineConfig(
             model_path=onnx_local,
             train_csv=train_local,
@@ -95,32 +95,56 @@ def handle_job(job: dict):
         quant_model = cfg.quant()
 
         aidge_core.aidge_save.save_model(quant_model, str(base_dir / "model_quant"))
-        send_progress(job_id, "log", "quantization", "Quantizzazione completata")
+        send_progress(job_id, "log", "quantization", "Quantization complete")
 
-        # --- 4. UPLOAD MODELLO QUANTIZZATO ---
+        # --- 3b. POST-QUANTIZATION METRICS ---
+        quant_metrics = None
+        test_split_key = job.get("test_split")
+        if test_split_key:
+            send_progress(job_id, "log", "quantization", "Computing post-quantization metrics on test set...")
+            try:
+                test_local = str(base_dir / "test.csv")
+                download(minio, "datasets", test_split_key, test_local)
+                quant_metrics = cfg.compute_metrics(quant_model, test_local)
+                logger.info(f"Post-quant metrics: {quant_metrics}")
+                send_progress(
+                    job_id, "log", "quantization",
+                    f"Post-Quant → MAE: {quant_metrics['mae']:.4f} | "
+                    f"RMSE: {quant_metrics['rmse']:.4f} | R²: {quant_metrics['r2']:.4f}",
+                )
+            except Exception as exc:
+                logger.warning("Post-quant metrics computation failed: %s", exc)
+                send_progress(job_id, "log", "quantization",
+                              f"Post-quant metrics unavailable: {exc}")
+
+        # --- 4. UPLOAD QUANTIZED MODEL ---
         minio_export_dest = f"quantized_models/{job_id}/model_quant.aidge"
         upload(minio, "quantized-models", minio_export_dest, str(base_dir / "model_quant.aidge"))
-        logger.info(f"Modello quantizzato caricato su MinIO: {minio_export_dest}")
+        logger.info(f"Quantized model uploaded to MinIO: {minio_export_dest}")
 
         export_request = {
             "job_id":      job_id,
             "export_path": minio_export_dest,
             "train_split": train_split_key,
-            "test_split":  job.get("test_split"),
+            "test_split":  test_split_key,
             "label_column": label_column,
         }
         send_kafka_message(os.environ["KAFKA_TOPIC_OUT"], export_request)
-        logger.info(f"Richiesta export inviata per Job {job_id}")
-        send_progress(job_id, "stage", "export", "Quantizzazione completata. Avvio export C++...")
+        logger.info(f"Export request sent for job {job_id}")
+        send_progress(
+            job_id, "stage", "export",
+            "Quantization complete. Starting C++ export...",
+            data={"quant_metrics": quant_metrics} if quant_metrics else None,
+        )
 
     except Exception as e:
-        logger.error(f"Errore critico nel Job {job_id}: {str(e)}", exc_info=True)
-        send_progress(job_id, "error", "quantization", f"Errore: {str(e)}")
+        logger.error(f"Critical error in job {job_id}: {str(e)}", exc_info=True)
+        send_progress(job_id, "error", "quantization", f"Error: {str(e)}")
 
     finally:
         if base_dir.exists():
             shutil.rmtree(base_dir)
-            logger.info(f"🧹 Pulizia cartella temporanea completata per {job_id}")
+            logger.info(f"Temporary folder cleaned for {job_id}")
 
 
 # ---------------------------------------------------------------------------
@@ -128,9 +152,9 @@ def handle_job(job: dict):
 # ---------------------------------------------------------------------------
 
 consumer = make_consumer(
-    bootstrap=os.environ["KAFKA_BOOTSTRAP"],
-    topic=os.environ["KAFKA_TOPIC_IN"],
-    group_id=os.environ["KAFKA_GROUP_ID"],
+    bootstrap=os.environ["KAFKA_BOOTSTRAP"].strip().strip('"'),
+    topic=os.environ["KAFKA_TOPIC_IN"].strip().strip('"'),
+    group_id=os.environ["KAFKA_GROUP_ID"].strip().strip('"'),
 )
 
 consume_loop(consumer, handle_job)

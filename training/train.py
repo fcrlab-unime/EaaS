@@ -15,7 +15,7 @@ def apply_reproducibility():
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.use_deterministic_algorithms(True)
-    print(f"Seed impostato a {seed} da variabile d'ambiente.")
+    print(f"Seed set to {seed} from environment variable.")
     return seed
 
 
@@ -149,6 +149,7 @@ def train(
             out = model(batch_x.unsqueeze(2)).squeeze(-1).squeeze(-1)
             loss = criterion(out, batch_y)
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
             train_loss += loss.item()
 
@@ -187,7 +188,7 @@ def train(
             })
 
         if no_improve >= patience:
-            msg = f"Early stopping a epoch {epoch+1}. Best val loss: {best_val_loss:.4f}"
+            msg = f"Early stopping at epoch {epoch+1}. Best val loss: {best_val_loss:.4f}"
             print(msg)
             if progress_callback:
                 progress_callback({"type": "log", "message": msg})

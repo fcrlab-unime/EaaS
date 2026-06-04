@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -21,42 +21,42 @@
       <div class="card">
         <div class="card-header">
           <div class="step-badge">1</div>
-          <h2>Architettura del Modello</h2>
+          <h2>Model Architecture</h2>
         </div>
 
         <div class="field">
-          <div class="field-label-row"><label>Script Python (.py)</label></div>
+          <div class="field-label-row"><label>Python Script (.py)</label></div>
           <div class="file-upload">
-            <label class="file-btn" for="modelScriptInput">Scegli file</label>
+            <label class="file-btn" for="modelScriptInput">Choose file</label>
             <input type="file" id="modelScriptInput" name="model_script" accept=".py">
-            <span class="file-name" id="modelScriptName">Nessun file selezionato</span>
+            <span class="file-name" id="modelScriptName">No file selected</span>
           </div>
         </div>
 
         <!-- Multi-class picker (shown only when >1 class found) -->
         <div class="class-picker" id="classPicker">
-          <label for="classPickerSelect">Classi rilevate — seleziona:</label>
+          <label for="classPickerSelect">Detected classes — select:</label>
           <select id="classPickerSelect"></select>
         </div>
 
         <div class="field">
           <div class="field-label-row">
-            <label for="classNameInput">Nome della classe</label>
-            <span class="auto-badge" id="classNameBadge">auto-rilevato</span>
+            <label for="classNameInput">Class name</label>
+            <span class="auto-badge" id="classNameBadge">auto-detected</span>
           </div>
-          <input type="text" id="classNameInput" name="class_name" placeholder="es. CCN1D" required>
+          <input type="text" id="classNameInput" name="class_name" placeholder="e.g. CCN1D" required>
         </div>
 
         <div class="field">
           <div class="field-label-row">
-            <label>Parametri costruttore</label>
-            <span class="auto-badge" id="modelParamsBadge">auto-rilevato</span>
+            <label>Constructor parameters</label>
+            <span class="auto-badge" id="modelParamsBadge">auto-detected</span>
           </div>
           <div id="paramRows"></div>
-          <button type="button" id="addParamBtn" class="add-param-btn">+ Aggiungi parametro</button>
-          <!-- Hidden input serializzato prima del submit -->
+          <button type="button" id="addParamBtn" class="add-param-btn">+ Add parameter</button>
+          <!-- Hidden input serialised before submit -->
           <input type="hidden" id="modelParamsInput" name="model_params" value="{}">
-          <div class="hint" id="paramsHint">Argomenti passati a <code>ModelClass(**model_params)</code></div>
+          <div class="hint" id="paramsHint">Arguments passed to <code>ModelClass(**model_params)</code></div>
         </div>
       </div>
 
@@ -64,17 +64,17 @@
       <div class="card">
         <div class="card-header">
           <div class="step-badge">2</div>
-          <h2>Pesi Pre-addestrati <span class="optional">opzionale</span></h2>
+          <h2>Pre-trained Weights <span class="optional">optional</span></h2>
         </div>
 
         <div class="field">
-          <div class="field-label-row"><label>File pesi (.pth)</label></div>
+          <div class="field-label-row"><label>Weights file (.pth)</label></div>
           <div class="file-upload">
-            <label class="file-btn" for="weightsInput">Scegli file</label>
+            <label class="file-btn" for="weightsInput">Choose file</label>
             <input type="file" id="weightsInput" name="weights" accept=".pth">
-            <span class="file-name" id="weightsName">Nessun file selezionato</span>
+            <span class="file-name" id="weightsName">No file selected</span>
           </div>
-          <div class="hint">Se omesso il modello parte da pesi casuali</div>
+          <div class="hint">If omitted, the model starts from random weights</div>
         </div>
       </div>
 
@@ -88,18 +88,18 @@
         <div class="field">
           <div class="field-label-row"><label>Dataset (.csv)</label></div>
           <div class="file-upload">
-            <label class="file-btn" for="datasetInput">Scegli file</label>
+            <label class="file-btn" for="datasetInput">Choose file</label>
             <input type="file" id="datasetInput" name="dataset" accept=".csv">
-            <span class="file-name" id="datasetName">Nessun file selezionato</span>
+            <span class="file-name" id="datasetName">No file selected</span>
           </div>
         </div>
 
         <div class="field">
-          <div class="field-label-row"><label>Colonna target (label)</label></div>
+          <div class="field-label-row"><label>Target column (label)</label></div>
           <select name="label_column" id="labelSelect" required disabled>
-            <option value="">— carica prima il CSV —</option>
+            <option value="">— load the CSV first —</option>
           </select>
-          <div class="hint">Carica il CSV per vedere le colonne disponibili</div>
+          <div class="hint">Load the CSV to see the available columns</div>
         </div>
 
         <div class="field early-stopping-row">
@@ -107,12 +107,12 @@
             <div>
               <div class="field-label-row"><label>Patience</label></div>
               <input type="number" name="patience" value="10" min="1" max="10000" required>
-              <div class="hint">Epoche senza miglioramento prima di fermarsi</div>
+              <div class="hint">Epochs without improvement before stopping</div>
             </div>
             <div>
-              <div class="field-label-row"><label>Max epoche</label></div>
+              <div class="field-label-row"><label>Max epochs</label></div>
               <input type="number" name="max_epochs" value="500" min="1" max="100000" required>
-              <div class="hint">Limite superiore di sicurezza</div>
+              <div class="hint">Upper safety limit</div>
             </div>
           </div>
         </div>
@@ -121,7 +121,7 @@
     </div><!-- /grid -->
 
     <div class="submit-row">
-      <button type="submit" id="submitBtn">Avvia Training</button>
+      <button type="submit" id="submitBtn">Start Training</button>
     </div>
   </form>
 
@@ -130,15 +130,15 @@
   <!-- Progress panel — shown after job submission -->
   <div id="progressPanel" class="card progress-panel hidden">
     <div class="progress-header">
-      <span class="progress-title">Progresso Pipeline</span>
+      <span class="progress-title">Pipeline Progress</span>
       <span class="progress-job">Job: <code id="progressJobId"></code></span>
-      <span class="progress-badge" id="progressBadge">In attesa</span>
+      <span class="progress-badge" id="progressBadge">Waiting</span>
     </div>
 
     <div class="stepper" id="stepper">
       <div class="step completed" data-step="submitted">
         <div class="step-icon" data-num="✓">✓</div>
-        <div class="step-name">Sottomesso</div>
+        <div class="step-name">Submitted</div>
       </div>
       <div class="step-line" id="line-0"></div>
       <div class="step" data-step="training">
@@ -148,7 +148,7 @@
       <div class="step-line" id="line-1"></div>
       <div class="step" data-step="quantization">
         <div class="step-icon" data-num="3">3</div>
-        <div class="step-name">Quantizzazione</div>
+        <div class="step-name">Quantization</div>
       </div>
       <div class="step-line" id="line-2"></div>
       <div class="step" data-step="export">
@@ -163,7 +163,7 @@
       <div class="step-line" id="line-4"></div>
       <div class="step" data-step="done">
         <div class="step-icon" data-num="✓">✓</div>
-        <div class="step-name">Fine</div>
+        <div class="step-name">Done</div>
       </div>
     </div>
 
@@ -180,9 +180,15 @@
 
     <div id="logConsole" class="log-console"></div>
 
-    <div id="metricsBlock" class="metrics-block hidden">
-      <div class="metrics-title">Test Set Metrics</div>
-      <div class="metrics-grid" id="metricsGrid"></div>
+    <div class="metrics-section">
+      <div id="metricsBlock" class="metrics-block metrics-block--train hidden">
+        <div class="metrics-title">Float Model — Test Set</div>
+        <div class="metrics-grid" id="metricsGrid"></div>
+      </div>
+      <div id="quantMetricsBlock" class="metrics-block metrics-block--quant hidden">
+        <div class="metrics-title">Quantized Model (int8) — Test Set</div>
+        <div class="metrics-grid" id="quantMetricsGrid"></div>
+      </div>
     </div>
   </div>
 

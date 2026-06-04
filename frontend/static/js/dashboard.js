@@ -133,7 +133,7 @@ document.getElementById('modelScriptInput').addEventListener('change', function 
   const nameEl = document.getElementById('modelScriptName');
 
   if (!file) {
-    nameEl.textContent = 'Nessun file selezionato';
+    nameEl.textContent = 'No file selected';
     nameEl.classList.remove('loaded');
     resetModelFields();
     return;
@@ -157,7 +157,7 @@ const addParamBtn = document.getElementById('addParamBtn');
 // Column headers (injected once)
 const colHeaders = document.createElement('div');
 colHeaders.className = 'param-col-headers';
-colHeaders.innerHTML = '<span>Chiave</span><span>Valore</span><span></span>';
+colHeaders.innerHTML = '<span>Key</span><span>Value</span><span></span>';
 paramRows.before(colHeaders);
 colHeaders.style.display = 'none';
 
@@ -169,13 +169,13 @@ function addParamRow(key = '', value = '', isWarning = false) {
 
   const keyIn = document.createElement('input');
   keyIn.type = 'text';
-  keyIn.placeholder = 'chiave';
+  keyIn.placeholder = 'key';
   keyIn.value = key;
   keyIn.autocomplete = 'off';
 
   const valIn = document.createElement('input');
   valIn.type = 'text';
-  valIn.placeholder = 'valore';
+  valIn.placeholder = 'value';
   valIn.value = value === null ? 'null' : String(value);
   valIn.autocomplete = 'off';
   if (isWarning) valIn.classList.add('warn-value');
@@ -193,7 +193,7 @@ function addParamRow(key = '', value = '', isWarning = false) {
   const removeBtn = document.createElement('button');
   removeBtn.type = 'button';
   removeBtn.className = 'param-remove-btn';
-  removeBtn.title = 'Rimuovi';
+  removeBtn.title = 'Remove';
   removeBtn.textContent = '×';
   removeBtn.addEventListener('click', () => {
     row.remove();
@@ -239,8 +239,8 @@ function updateParamsHint() {
   const hasWarning = paramRows.querySelector('.warn-value') !== null;
   hint.className = hasWarning ? 'hint warn' : 'hint';
   hint.innerHTML = hasWarning
-    ? 'Verifica i valori a <strong>0</strong> o <strong>null</strong>: sono parametri obbligatori senza default.'
-    : 'Argomenti passati a <code>ModelClass(**model_params)</code>';
+    ? 'Check values set to <strong>0</strong> or <strong>null</strong>: these are required parameters without defaults.'
+    : 'Arguments passed to <code>ModelClass(**model_params)</code>';
 }
 
 function setParamRows(params) {
@@ -316,7 +316,7 @@ function bindFileLabel(inputId, nameId) {
       nameEl.textContent = this.files[0].name;
       nameEl.classList.add('loaded');
     } else {
-      nameEl.textContent = 'Nessun file selezionato';
+      nameEl.textContent = 'No file selected';
       nameEl.classList.remove('loaded');
     }
   });
@@ -329,7 +329,7 @@ document.getElementById('datasetInput').addEventListener('change', function () {
   const select = document.getElementById('labelSelect');
 
   if (!file) {
-    select.innerHTML = '<option value="">— carica prima il CSV —</option>';
+    select.innerHTML = '<option value="">— load the CSV first —</option>';
     select.disabled = true;
     return;
   }
@@ -373,16 +373,16 @@ document.getElementById('jobForm').addEventListener('submit', async function (e)
   const patience    = parseInt(document.querySelector('[name=patience]').value, 10);
   const maxEpochs   = parseInt(document.querySelector('[name=max_epochs]').value, 10);
 
-  if (!modelScript)         { showError(result, 'Seleziona uno script Python (.py)'); return; }
-  if (!dataset)             { showError(result, 'Seleziona un dataset (.csv)'); return; }
-  if (!className)           { showError(result, 'Inserisci il nome della classe del modello'); return; }
-  if (!labelColumn)         { showError(result, 'Seleziona la colonna label dal CSV'); return; }
-  if (!(patience > 0))      { showError(result, 'Patience deve essere almeno 1'); return; }
-  if (!(maxEpochs > 0))     { showError(result, 'Max epoche deve essere almeno 1'); return; }
-  if (patience > maxEpochs) { showError(result, 'Patience non può essere maggiore di Max epoche'); return; }
+  if (!modelScript)         { showError(result, 'Select a Python script (.py)'); return; }
+  if (!dataset)             { showError(result, 'Select a dataset (.csv)'); return; }
+  if (!className)           { showError(result, 'Enter the model class name'); return; }
+  if (!labelColumn)         { showError(result, 'Select the label column from the CSV'); return; }
+  if (!(patience > 0))      { showError(result, 'Patience must be at least 1'); return; }
+  if (!(maxEpochs > 0))     { showError(result, 'Max epochs must be at least 1'); return; }
+  if (patience > maxEpochs) { showError(result, 'Patience cannot be greater than Max epochs'); return; }
 
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span>Invio in corso…';
+  btn.innerHTML = '<span class="spinner"></span>Submitting…';
   result.className = 'result hidden';
 
   try {
@@ -392,23 +392,23 @@ document.getElementById('jobForm').addEventListener('submit', async function (e)
     if (response.ok) {
       result.className = 'result success';
       result.innerHTML =
-        `<strong>Job avviato con successo!</strong>&nbsp; ` +
+        `<strong>Job started successfully!</strong>&nbsp; ` +
         `ID: <code>${data.job_id}</code>`;
       startProgress(data.job_id);
     } else {
-      showError(result, data.detail ?? 'Errore sconosciuto dal server');
+      showError(result, data.detail ?? 'Unknown server error');
     }
   } catch (err) {
-    showError(result, `Errore di rete: ${err.message}`);
+    showError(result, `Network error: ${err.message}`);
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Avvia Training';
+    btn.textContent = 'Start Training';
   }
 });
 
 function showError(el, msg) {
   el.className = 'result error';
-  el.textContent = `Errore: ${msg}`;
+  el.textContent = `Error: ${msg}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -423,11 +423,13 @@ function startProgress(jobId) {
   _capturedMetrics = null;
 
   document.getElementById('progressJobId').textContent = jobId;
-  document.getElementById('progressBadge').textContent = 'In attesa';
+  document.getElementById('progressBadge').textContent = 'Waiting';
   document.getElementById('progressBadge').className = 'progress-badge';
   document.getElementById('progressPanel').classList.remove('hidden');
   document.getElementById('epochProgress').classList.add('hidden');
   document.getElementById('metricsBlock').classList.add('hidden');
+  document.getElementById('quantMetricsBlock').classList.add('hidden');
+  document.getElementById('quantMetricsGrid').innerHTML = '';
   document.getElementById('logConsole').innerHTML = '';
   document.getElementById('epochBarFill').style.width = '0%';
 
@@ -438,7 +440,7 @@ function startProgress(jobId) {
   _sse.onmessage = (e) => _handleEvent(JSON.parse(e.data));
   _sse.onerror = () => {
     if (document.getElementById('progressBadge').className.indexOf('done') === -1) {
-      _appendLog({ type: 'error', message: 'Connessione al server interrotta.' });
+      _appendLog({ type: 'error', message: 'Connection to server lost.' });
     }
   };
 }
@@ -465,6 +467,11 @@ function _handleEvent(ev) {
 
   if (type === 'stage' && data && data.metrics) {
     _capturedMetrics = data.metrics;
+    _showMetrics(data.metrics);
+  }
+
+  if (type === 'stage' && data && data.quant_metrics) {
+    _showQuantMetrics(data.quant_metrics);
   }
 
   if (stage === 'quantization' || stage === 'export' || stage === 'flash') {
@@ -473,18 +480,17 @@ function _handleEvent(ev) {
 
   if (type === 'done') {
     document.getElementById('epochProgress').classList.add('hidden');
-    if (_capturedMetrics) _showMetrics(_capturedMetrics);
     if (data && data.export_archive) {
-      _appendLog({ type: 'log', message: `Archivio export: exports/${data.export_archive}` });
+      _appendLog({ type: 'log', message: `Export archive: exports/${data.export_archive}` });
     }
     if (data && data.serial_output) {
-      _appendLog({ type: 'stage', message: `Output ESP32:\n${data.serial_output}` });
+      _appendLog({ type: 'stage', message: `ESP32 Output:\n${data.serial_output}` });
     }
     if (_sse) { _sse.close(); }
   }
 
   if (type === 'error') {
-    document.getElementById('progressBadge').textContent = 'Errore';
+    document.getElementById('progressBadge').textContent = 'Error';
     document.getElementById('progressBadge').className = 'progress-badge error';
     if (_sse) { _sse.close(); }
   }
@@ -498,10 +504,10 @@ function _setStepper(stage) {
 
   const badge = document.getElementById('progressBadge');
   if (stage === 'done') {
-    badge.textContent = 'Completato';
+    badge.textContent = 'Completed';
     badge.className = 'progress-badge done';
   } else {
-    const labels = { submitted: 'In attesa', training: 'Training', quantization: 'Quantizzazione', export: 'Export C++', flash: 'Flash ESP32' };
+    const labels = { submitted: 'Waiting', training: 'Training', quantization: 'Quantization', export: 'Export C++', flash: 'Flash ESP32' };
     badge.textContent = labels[stage] || stage;
     badge.className = 'progress-badge running';
   }
@@ -530,7 +536,7 @@ function _appendLog(ev) {
   if (!message) return;
 
   const console_ = document.getElementById('logConsole');
-  const ts = new Date().toLocaleTimeString('it-IT', { hour12: false });
+  const ts = new Date().toLocaleTimeString('en-GB', { hour12: false });
   const line = document.createElement('div');
 
   let cls = '';
@@ -559,4 +565,19 @@ function _showMetrics(metrics) {
       <div class="metric-value">${typeof val === 'number' ? val.toFixed(4) : val}</div>
     </div>`).join('');
   document.getElementById('metricsBlock').classList.remove('hidden');
+}
+
+function _showQuantMetrics(metrics) {
+  const grid = document.getElementById('quantMetricsGrid');
+  grid.innerHTML = [
+    ['MAE',  metrics.mae],
+    ['MSE',  metrics.mse],
+    ['RMSE', metrics.rmse],
+    ['R²',   metrics.r2],
+  ].map(([name, val]) => `
+    <div class="metric-card">
+      <div class="metric-name">${name}</div>
+      <div class="metric-value">${typeof val === 'number' ? val.toFixed(4) : val}</div>
+    </div>`).join('');
+  document.getElementById('quantMetricsBlock').classList.remove('hidden');
 }

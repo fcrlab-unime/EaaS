@@ -16,7 +16,7 @@ from train import train
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Inizializza client MinIO una sola volta, riutilizzabile per tutti i job
+# Initialize MinIO client once, reusable across all jobs
 minio = make_client()
 
 _progress_producer = None
@@ -51,7 +51,7 @@ def send_progress(job_id: str, type_: str, stage: str, message: str, data: dict 
 
 
 def load_model_class(script_path: str, class_name: str):
-    """Carica dinamicamente la classe del modello dallo script scaricato."""
+    """Dynamically load the model class from the downloaded script."""
     spec = importlib.util.spec_from_file_location("custom_model", script_path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -60,28 +60,28 @@ def load_model_class(script_path: str, class_name: str):
 
 def handle_job(job: dict):
     """
-    Logica principale per processare un job di training:
-    1. Setup cartelle
-    2. Download asset da MinIO
-    3. Istanziazione dinamica del modello
-    4. Caricamento pesi e Training
-    5. Salvataggio e Upload risultati
+    Main logic for processing a training job:
+    1. Setup working directories
+    2. Download assets from MinIO
+    3. Dynamic model instantiation
+    4. Load weights and train
+    5. Save and upload results
     6. Cleanup
     """
     job_id = job["job_id"]
     class_name = job["class_name"]
-    # Parametri per il costruttore della classe (es. input_channels, ecc.)
-    model_params = job.get("model_params", {}) 
-    
-    # Percorso di lavoro locale al container
+    # Parameters for the model constructor (e.g. input_channels, etc.)
+    model_params = job.get("model_params", {})
+
+    # Local working path inside the container
     base_dir = Path(f"/app/downloads/{job_id}")
     base_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        logger.info(f"Inizio elaborazione Job: {job_id}")
-        send_progress(job_id, "stage", "training", f"Avvio training — modello: {class_name}")
+        logger.info(f"Starting job: {job_id}")
+        send_progress(job_id, "stage", "training", f"Starting training — model: {class_name}")
 
-        # --- 1. DOWNLOAD DA MINIO ---
+        # --- 1. DOWNLOAD FROM MINIO ---
         script_path = download(minio, "models", job["model_script"], str(base_dir / "model_script.py"))
 
         dataset_local = str(base_dir / job["dataset"])
@@ -91,16 +91,16 @@ def handle_job(job: dict):
         if job.get("weights"):
             weights_path = download(minio, "weights", job["weights"], str(base_dir / "weights.pth"))
 
-        # --- 2. ISTANZIAZIONE MODELLO ---
+        # --- 2. MODEL INSTANTIATION ---
         ModelClass = load_model_class(str(script_path), class_name)
         model = ModelClass(**model_params)
-        logger.info(f"Modello {class_name} istanziato con successo.")
+        logger.info(f"Model {class_name} instantiated successfully.")
 
-        # --- 3. CARICAMENTO PESI INIZIALI ---
+        # --- 3. LOAD INITIAL WEIGHTS ---
         if weights_path and os.path.exists(weights_path):
             model.load_state_dict(torch.load(str(weights_path), map_location="cpu"))
-            logger.info(f"Pesi iniziali caricati da {job['weights']}")
-            send_progress(job_id, "log", "training", f"Pesi pre-addestrati caricati da {job['weights']}")
+            logger.info(f"Initial weights loaded from {job['weights']}")
+            send_progress(job_id, "log", "training", f"Pre-trained weights loaded from {job['weights']}")
 
         # --- 4. TRAINING ---
         def _epoch_callback(event):
@@ -128,11 +128,11 @@ def handle_job(job: dict):
         logger.info(f"Test metrics: {test_metrics}")
         send_progress(
             job_id, "stage", "quantization",
-            "Training completato. Avvio quantizzazione...",
+            "Training complete. Starting quantization...",
             data={"metrics": test_metrics},
         )
 
-        # --- 5. UPLOAD SPLIT CSV SU MINIO ---
+        # --- 5. UPLOAD SPLIT CSV TO MINIO ---
         splits_dir = base_dir / "splits"
         splits_dir.mkdir(exist_ok=True)
         for split_name, split_df in split_dfs.items():
@@ -140,9 +140,9 @@ def handle_job(job: dict):
             split_df.to_csv(str(split_local), index=False)
             minio_split_key = f"{job_id}/{split_name}.csv"
             upload(minio, "datasets", minio_split_key, str(split_local))
-            logger.info(f"Split '{split_name}' caricato in splits/{minio_split_key}")
+            logger.info(f"Split '{split_name}' uploaded to datasets/{minio_split_key}")
 
-        # --- 7. EXPORT ONNX ---
+        # --- 6. ONNX EXPORT ---
         import onnx as _onnx
         onnx_path = base_dir / "model.onnx"
         dummy_input = torch.randn(1, model_params["input_channels"], 1)
@@ -155,24 +155,24 @@ def handle_job(job: dict):
             dynamic_axes={"input": {0: "batch_size"}, "output": {0: "batch_size"}},
             do_constant_folding=True,
         )
-        # Forza salvataggio inline: elimina il file .data esterno se generato
+        # Force inline save: remove external .data file if generated
         _onnx_model = _onnx.load(str(onnx_path))
         _onnx.save_model(_onnx_model, str(onnx_path), save_as_external_data=False)
-        logger.info(f"ONNX esportato (inline, nessun .data esterno): {onnx_path}")
+        logger.info(f"ONNX exported (inline, no external .data file): {onnx_path}")
 
-        # --- 8. SALVATAGGIO PESI ---
+        # --- 7. SAVE WEIGHTS ---
         output_path = base_dir / "trained_model.pth"
         torch.save(model.state_dict(), str(output_path))
 
-        # --- 9. UPLOAD MODELLO ---
+        # --- 8. UPLOAD MODEL ---
         minio_pth_dest  = f"{job_id}/{class_name}_trained.pth"
         minio_onnx_dest = f"{job_id}/{class_name}_final.onnx"
 
         upload(minio, "models", minio_pth_dest,  str(output_path))
         upload(minio, "onnx",   minio_onnx_dest, str(onnx_path))
 
-        logger.info(f".pth caricato in: {minio_pth_dest}")
-        logger.info(f".onnx caricato in: {minio_onnx_dest}")
+        logger.info(f".pth uploaded to: {minio_pth_dest}")
+        logger.info(f".onnx uploaded to: {minio_onnx_dest}")
 
         quantizer_request = {
             "job_id": job_id,
@@ -183,26 +183,23 @@ def handle_job(job: dict):
             "test_metrics": test_metrics,
         }
         send_kafka_message(quantizer_request)
-        logger.info(f"Richiesta di quantizzazione inviata per Job {job_id}")
+        logger.info(f"Quantization request sent for job {job_id}")
 
     except Exception as e:
-        logger.error(f"Errore critico nel Job {job_id}: {str(e)}", exc_info=True)
-        send_progress(job_id, "error", "training", f"Errore: {str(e)}")
+        logger.error(f"Critical error in job {job_id}: {str(e)}", exc_info=True)
+        send_progress(job_id, "error", "training", f"Error: {str(e)}")
 
     finally:
-        # --- 8. CLEANUP FINALE ---
+        # --- 9. FINAL CLEANUP ---
         if base_dir.exists():
             shutil.rmtree(base_dir)
-            logger.info(f"Pulizia cartella temporanea completata per {job_id}")
-
-
-    
+            logger.info(f"Temporary folder cleaned for {job_id}")
 
 
 consumer = make_consumer(
-    bootstrap=os.environ["KAFKA_BOOTSTRAP"],
-    topic=os.environ["KAFKA_TOPIC_IN"],
-    group_id=os.environ["KAFKA_GROUP_ID"],
+    bootstrap=os.environ["KAFKA_BOOTSTRAP"].strip().strip('"'),
+    topic=os.environ["KAFKA_TOPIC_IN"].strip().strip('"'),
+    group_id=os.environ["KAFKA_GROUP_ID"].strip().strip('"'),
 )
 
 consume_loop(consumer, handle_job)
