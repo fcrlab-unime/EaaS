@@ -145,6 +145,7 @@ def handle_job(job: dict):
         # --- 6. ONNX EXPORT ---
         import onnx as _onnx
         onnx_path = base_dir / "model.onnx"
+        torch.manual_seed(int(os.environ.get("TRAINING_SEED", "42")))
         dummy_input = torch.randn(1, model_params["input_channels"], 1)
         torch.onnx.export(
             model,

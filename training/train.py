@@ -5,6 +5,7 @@ import random
 import numpy as np
 import pandas as pd
 import torch
+from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader, Dataset
 
 
@@ -14,6 +15,7 @@ def apply_reproducibility():
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
     torch.use_deterministic_algorithms(True)
     print(f"Seed set to {seed} from environment variable.")
     return seed
@@ -68,11 +70,25 @@ def _split_dataframe(df: pd.DataFrame, label_column, train_ratio, val_ratio, see
     }
 
     X = X_df.values
+
+    scaler = StandardScaler()
+    X_train_norm = np.nan_to_num(scaler.fit_transform(X[i_train]))
+    X_val_norm   = np.nan_to_num(scaler.transform(X[i_val]))
+    X_test_norm  = np.nan_to_num(scaler.transform(X[i_test]))
+
+    for split_name, x_norm, indices in [
+        ("train", X_train_norm, i_train),
+        ("val",   X_val_norm,   i_val),
+        ("test",  X_test_norm,  i_test),
+    ]:
+        split_dfs[split_name][feature_cols] = x_norm
+
     return (
-        _SplitDataset(X[i_train], y[i_train]),
-        _SplitDataset(X[i_val],   y[i_val]),
-        _SplitDataset(X[i_test],  y[i_test]),
+        _SplitDataset(X_train_norm, y[i_train]),
+        _SplitDataset(X_val_norm,   y[i_val]),
+        _SplitDataset(X_test_norm,  y[i_test]),
         split_dfs,
+        scaler,
     )
 
 
@@ -112,7 +128,16 @@ def train(
         raise ValueError("train_ratio + val_ratio must be < 1.0 to leave room for a test set")
 
     df = pd.read_csv(csv_path)
-    train_ds, val_ds, test_ds, split_dfs = _split_dataframe(
+    n_before = len(df)
+    df = df.dropna()
+    n_dropped = n_before - len(df)
+    if n_dropped:
+        msg = f"Dropped {n_dropped} rows with NaN values ({n_before} → {len(df)} rows)"
+        print(msg)
+        if progress_callback:
+            progress_callback({"type": "log", "message": msg})
+
+    train_ds, val_ds, test_ds, split_dfs, scaler = _split_dataframe(
         df, label_column, train_ratio, val_ratio, seed
     )
 
@@ -121,7 +146,9 @@ def train(
     if progress_callback:
         progress_callback({"type": "log", "message": split_msg})
 
-    train_loader = DataLoader(train_ds, batch_size=32, shuffle=True)
+    g = torch.Generator()
+    g.manual_seed(seed)
+    train_loader = DataLoader(train_ds, batch_size=32, shuffle=True, generator=g)
     val_loader   = DataLoader(val_ds,   batch_size=32)
     test_loader  = DataLoader(test_ds,  batch_size=32)
 
