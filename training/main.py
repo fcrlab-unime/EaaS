@@ -68,10 +68,10 @@ def handle_job(job: dict):
     5. Save and upload results
     6. Cleanup
     """
-    job_id = job["job_id"]
-    class_name = job["class_name"]
+    job_id          = job["job_id"]
+    class_name      = job["class_name"]
     # Parameters for the model constructor (e.g. input_channels, etc.)
-    model_params = job.get("model_params", {})
+    model_params    = job.get("model_params", {})
 
     # Local working path inside the container
     base_dir = Path(f"/app/downloads/{job_id}")
@@ -87,22 +87,12 @@ def handle_job(job: dict):
         dataset_local = str(base_dir / job["dataset"])
         download(minio, "datasets", job["dataset"], dataset_local)
 
-        weights_path = None
-        if job.get("weights"):
-            weights_path = download(minio, "weights", job["weights"], str(base_dir / "weights.pth"))
-
         # --- 2. MODEL INSTANTIATION ---
         ModelClass = load_model_class(str(script_path), class_name)
         model = ModelClass(**model_params)
         logger.info(f"Model {class_name} instantiated successfully.")
 
-        # --- 3. LOAD INITIAL WEIGHTS ---
-        if weights_path and os.path.exists(weights_path):
-            model.load_state_dict(torch.load(str(weights_path), map_location="cpu"))
-            logger.info(f"Initial weights loaded from {job['weights']}")
-            send_progress(job_id, "log", "training", f"Pre-trained weights loaded from {job['weights']}")
-
-        # --- 4. TRAINING ---
+        # --- 3. TRAINING ---
         def _epoch_callback(event):
             if event["type"] == "epoch":
                 send_progress(

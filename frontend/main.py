@@ -117,7 +117,6 @@ async def submit_job(
     label_column: str = Form(...),
     patience: int = Form(10),
     max_epochs: int = Form(500),
-    weights: UploadFile = File(None),
 ):
     try:
         params = json.loads(model_params)
@@ -141,14 +140,6 @@ async def submit_job(
         _put(minio, "datasets", dataset.filename, dataset_bytes, "text/csv")
         logger.info("Dataset caricato: datasets/%s", dataset.filename)
 
-        weights_key = None
-        if weights and weights.filename:
-            weights_bytes = await weights.read()
-            if weights_bytes:
-                weights_key = weights.filename
-                _put(minio, "weights", weights_key, weights_bytes)
-                logger.info("Pesi caricati: weights/%s", weights_key)
-
     except S3Error as e:
         logger.error("Errore MinIO: %s", e)
         raise HTTPException(status_code=500, detail=f"Errore upload MinIO: {e}")
@@ -163,9 +154,6 @@ async def submit_job(
         "patience": patience,
         "max_epochs": max_epochs,
     }
-    if weights_key:
-        job["weights"] = weights_key
-
     producer = _kafka_producer()
     producer.produce(
         topic=os.environ.get("KAFKA_TOPIC_IN", "train-jobs"),

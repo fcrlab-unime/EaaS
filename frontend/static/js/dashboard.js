@@ -321,7 +321,6 @@ function bindFileLabel(inputId, nameId) {
     }
   });
 }
-bindFileLabel('weightsInput', 'weightsName');
 bindFileLabel('datasetInput', 'datasetName');
 
 document.getElementById('datasetInput').addEventListener('change', function () {

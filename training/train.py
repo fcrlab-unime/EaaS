@@ -5,7 +5,7 @@ import random
 import numpy as np
 import pandas as pd
 import torch
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import MinMaxScaler
 from torch.utils.data import DataLoader, Dataset
 
 
@@ -41,19 +41,30 @@ def _split_dataframe(df: pd.DataFrame, label_column, train_ratio, val_ratio, see
         X_df = df.iloc[:, :-1]
         y = df.iloc[:, -1].values
 
-    # Shuffle with the reproducibility seed
+    n_bins = max(2, min(10, len(df) // 10))
+    try:
+        strata = pd.qcut(y, q=n_bins, labels=False, duplicates="drop").astype(int)
+    except Exception:
+        strata = np.zeros(len(y), dtype=int)
+
     rng = np.random.default_rng(seed)
-    idx = rng.permutation(len(df))
 
-    n = len(df)
-    n_train = int(n * train_ratio)
-    n_val   = int(n * val_ratio)
+    i_train, i_val, i_test = [], [], []
+    for bin_id in np.unique(strata):
+        bin_idx = np.where(strata == bin_id)[0]
+        bin_idx = rng.permutation(bin_idx)
+        n_b = len(bin_idx)
+        n_tr = max(1, int(n_b * train_ratio))
+        n_va = max(1, int(n_b * val_ratio))
+        i_train.extend(bin_idx[:n_tr].tolist())
+        i_val.extend(bin_idx[n_tr:n_tr + n_va].tolist())
+        i_test.extend(bin_idx[n_tr + n_va:].tolist())
 
-    i_train = idx[:n_train]
-    i_val   = idx[n_train:n_train + n_val]
-    i_test  = idx[n_train + n_val:]
+    i_train = np.array(i_train)
+    i_val   = np.array(i_val)
+    i_test  = np.array(i_test)
 
-    # Keep original column order: features first, label last
+
     label_col = label_column if (label_column and label_column in df.columns) else df.columns[-1]
     feature_cols = [c for c in df.columns if c != label_col]
 
@@ -71,7 +82,7 @@ def _split_dataframe(df: pd.DataFrame, label_column, train_ratio, val_ratio, see
 
     X = X_df.values
 
-    scaler = StandardScaler()
+    scaler = MinMaxScaler()
     X_train_norm = np.nan_to_num(scaler.fit_transform(X[i_train]))
     X_val_norm   = np.nan_to_num(scaler.transform(X[i_val]))
     X_test_norm  = np.nan_to_num(scaler.transform(X[i_test]))
