@@ -172,6 +172,21 @@
         <div class="metrics-grid" id="quantMetricsGrid"></div>
       </div>
     </div>
+
+    <div id="espOutputBlock" class="metrics-block metrics-block--esp hidden">
+      <div class="metrics-title">ESP32 Output</div>
+      <pre id="espRawOutput" class="esp-raw-output"></pre>
+      <div id="espDequantBlock" class="hidden">
+        <div class="esp-deq-label">Dequantized values (&#247; 127)</div>
+        <div class="metrics-grid" id="espDequantGrid"></div>
+      </div>
+    </div>
+
+    <div id="downloadBlock" class="download-block hidden">
+      <a id="downloadBtn" class="download-btn" href="#" download>
+        Download Export C++
+      </a>
+    </div>
   </div>
 
 </main>
