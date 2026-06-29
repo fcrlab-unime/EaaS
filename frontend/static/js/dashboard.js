@@ -401,7 +401,7 @@ document.getElementById('jobForm').addEventListener('submit', async function (e)
     showError(result, `Network error: ${err.message}`);
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Training';
+    btn.textContent = 'Start';
   }
 });
 
