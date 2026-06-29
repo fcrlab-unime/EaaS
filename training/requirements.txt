@@ -1,8 +1,6 @@
 minio
 confluent-kafka
 python-dotenv
-torch
-torchvision
 pandas
 onnxscript
 scikit-learn

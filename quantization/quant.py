@@ -104,9 +104,6 @@ class PipelineConfig:
         self._output_scale = max_abs_output_model / float(UPSCALE) if max_abs_output_model > 0 else 1.0 / float(UPSCALE)
 
         float_preds = np.array(float_preds)
-        y_true_sub  = targets[indices].astype(np.float64)
-        ss_res = float(np.sum((y_true_sub - float_preds) ** 2))
-        ss_tot = float(np.sum((y_true_sub - y_true_sub.mean()) ** 2))
 
         calibration_set = []
         for i in indices:

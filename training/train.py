@@ -163,7 +163,7 @@ def train(
     val_loader   = DataLoader(val_ds,   batch_size=32)
     test_loader  = DataLoader(test_ds,  batch_size=32)
 
-    device = torch.device("cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
