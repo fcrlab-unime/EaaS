@@ -144,14 +144,18 @@ SERIAL_READ_SECS = int(os.environ.get("SERIAL_READ_SECS", "8"))
 
 
 def _read_serial_output(port: str, baud: int = 115200, duration: int = SERIAL_READ_SECS) -> str:
-    """Read serial output from the device for `duration` seconds after reset."""
+    """Read serial output from the device for `duration` seconds.
+
+    Opens the port immediately after flash and polls with a short timeout
+    so any data buffered by the kernel (or arriving shortly after) is
+    captured without wasting time on sleeps.
+    """
     try:
         import serial
     except ImportError:
         return "(pyserial not available)"
     try:
-        ser = serial.Serial(port, baud, timeout=1)
-        time.sleep(1.5)
+        ser = serial.Serial(port, baud, timeout=0.2)
         lines = []
         deadline = time.time() + duration
         while time.time() < deadline:
@@ -231,10 +235,10 @@ def handle_job(job: dict):
             raise RuntimeError(f"idf.py flash failed (rc={result.returncode}): {result.stderr[-500:]}")
         logger.info("Flash complete on %s", FLASH_PORT)
 
-        # 6. Read serial output
-        send_progress(job_id, "log", "flash", f"Reading serial output ({SERIAL_READ_SECS}s)...")
+        # 6. Read serial output — apri la porta subito, PRIMA di qualsiasi chiamata Kafka
         serial_out = _read_serial_output(FLASH_PORT)
         logger.info("Serial output:\n%s", serial_out)
+        send_progress(job_id, "log", "flash", f"Reading serial output ({SERIAL_READ_SECS}s)...")
 
         # 7. Done
         send_kafka_message(

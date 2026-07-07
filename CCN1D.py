@@ -50,5 +50,5 @@ class CCN1D(torch.nn.Module):
             x = self.dropout(x)
 
         x = self.output_layer(x)
-        #x = x.squeeze()
+        x = x.squeeze()
         return x

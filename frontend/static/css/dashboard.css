@@ -1,4 +1,5 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+.hidden { display: none !important; }
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -26,10 +27,9 @@ main {
 
 .grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 20px;
 }
-.grid .card:last-child { grid-column: 1 / -1; }
 
 .card {
   background: #fff;
@@ -482,3 +482,75 @@ button[type="submit"]:disabled { background: #a0aec0; cursor: not-allowed; }
   border-color: #bfdbfe;
 }
 .metrics-block--quant .metric-value { color: #1d4ed8; }
+
+/* ESP32 output — accento ambra */
+#espOutputBlock {
+  margin-top: 20px;
+}
+.metrics-block--esp {
+  border-top: 3px solid #d97706;
+  padding-top: 10px;
+}
+.metrics-block--esp .metrics-title { color: #b45309; }
+.esp-raw-output {
+  background: #0d1117;
+  color: #8b949e;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-family: "SF Mono", "Fira Code", "Courier New", monospace;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  max-height: 160px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin-bottom: 10px;
+}
+.esp-raw-output::-webkit-scrollbar { width: 5px; }
+.esp-raw-output::-webkit-scrollbar-track { background: transparent; }
+.esp-raw-output::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+.esp-deq-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #b45309;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+}
+.metrics-block--esp .metric-card {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+.metrics-block--esp .metric-value { color: #92400e; }
+.metric-raw {
+  font-size: 0.65rem;
+  color: #aaa;
+  margin-top: 4px;
+}
+
+/* Download button */
+#downloadBlock {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
+}
+#downloadBlock.hidden { display: none; }
+.download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 24px;
+  background: #1a1a2e;
+  color: #fff;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.15s, transform 0.1s;
+}
+.download-btn::before {
+  content: "\2B07";
+  font-size: 1rem;
+}
+.download-btn:hover { background: #2d2d4e; }
+.download-btn:active { transform: scale(0.97); }

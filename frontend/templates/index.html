@@ -60,28 +60,10 @@
         </div>
       </div>
 
-      <!-- Card 2: Weights -->
+      <!-- Card 2: Dataset -->
       <div class="card">
         <div class="card-header">
           <div class="step-badge">2</div>
-          <h2>Pre-trained Weights <span class="optional">optional</span></h2>
-        </div>
-
-        <div class="field">
-          <div class="field-label-row"><label>Weights file (.pth)</label></div>
-          <div class="file-upload">
-            <label class="file-btn" for="weightsInput">Choose file</label>
-            <input type="file" id="weightsInput" name="weights" accept=".pth">
-            <span class="file-name" id="weightsName">No file selected</span>
-          </div>
-          <div class="hint">If omitted, the model starts from random weights</div>
-        </div>
-      </div>
-
-      <!-- Card 3: Dataset (full width) -->
-      <div class="card">
-        <div class="card-header">
-          <div class="step-badge">3</div>
           <h2>Dataset &amp; Training</h2>
         </div>
 
@@ -121,7 +103,7 @@
     </div><!-- /grid -->
 
     <div class="submit-row">
-      <button type="submit" id="submitBtn">Start Training</button>
+      <button type="submit" id="submitBtn">Start</button>
     </div>
   </form>
 
@@ -189,6 +171,21 @@
         <div class="metrics-title">Quantized Model (int8) — Test Set</div>
         <div class="metrics-grid" id="quantMetricsGrid"></div>
       </div>
+    </div>
+
+    <div id="espOutputBlock" class="metrics-block metrics-block--esp hidden">
+      <div class="metrics-title">ESP32 Output</div>
+      <pre id="espRawOutput" class="esp-raw-output"></pre>
+      <div id="espDequantBlock" class="hidden">
+        <div class="esp-deq-label">Dequantized values (&#247; 127)</div>
+        <div class="metrics-grid" id="espDequantGrid"></div>
+      </div>
+    </div>
+
+    <div id="downloadBlock" class="download-block hidden">
+      <a id="downloadBtn" class="download-btn" href="#" download>
+        Download Export C++
+      </a>
     </div>
   </div>
 

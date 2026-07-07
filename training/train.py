@@ -5,6 +5,7 @@ import random
 import numpy as np
 import pandas as pd
 import torch
+from sklearn.preprocessing import MinMaxScaler
 from torch.utils.data import DataLoader, Dataset
 
 
@@ -14,6 +15,7 @@ def apply_reproducibility():
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
     torch.use_deterministic_algorithms(True)
     print(f"Seed set to {seed} from environment variable.")
     return seed
@@ -39,19 +41,30 @@ def _split_dataframe(df: pd.DataFrame, label_column, train_ratio, val_ratio, see
         X_df = df.iloc[:, :-1]
         y = df.iloc[:, -1].values
 
-    # Shuffle with the reproducibility seed
+    n_bins = max(2, min(10, len(df) // 10))
+    try:
+        strata = pd.qcut(y, q=n_bins, labels=False, duplicates="drop").astype(int)
+    except Exception:
+        strata = np.zeros(len(y), dtype=int)
+
     rng = np.random.default_rng(seed)
-    idx = rng.permutation(len(df))
 
-    n = len(df)
-    n_train = int(n * train_ratio)
-    n_val   = int(n * val_ratio)
+    i_train, i_val, i_test = [], [], []
+    for bin_id in np.unique(strata):
+        bin_idx = np.where(strata == bin_id)[0]
+        bin_idx = rng.permutation(bin_idx)
+        n_b = len(bin_idx)
+        n_tr = max(1, int(n_b * train_ratio))
+        n_va = max(1, int(n_b * val_ratio))
+        i_train.extend(bin_idx[:n_tr].tolist())
+        i_val.extend(bin_idx[n_tr:n_tr + n_va].tolist())
+        i_test.extend(bin_idx[n_tr + n_va:].tolist())
 
-    i_train = idx[:n_train]
-    i_val   = idx[n_train:n_train + n_val]
-    i_test  = idx[n_train + n_val:]
+    i_train = np.array(i_train)
+    i_val   = np.array(i_val)
+    i_test  = np.array(i_test)
 
-    # Keep original column order: features first, label last
+
     label_col = label_column if (label_column and label_column in df.columns) else df.columns[-1]
     feature_cols = [c for c in df.columns if c != label_col]
 
@@ -68,11 +81,25 @@ def _split_dataframe(df: pd.DataFrame, label_column, train_ratio, val_ratio, see
     }
 
     X = X_df.values
+
+    scaler = MinMaxScaler()
+    X_train_norm = np.nan_to_num(scaler.fit_transform(X[i_train]))
+    X_val_norm   = np.nan_to_num(scaler.transform(X[i_val]))
+    X_test_norm  = np.nan_to_num(scaler.transform(X[i_test]))
+
+    for split_name, x_norm, indices in [
+        ("train", X_train_norm, i_train),
+        ("val",   X_val_norm,   i_val),
+        ("test",  X_test_norm,  i_test),
+    ]:
+        split_dfs[split_name][feature_cols] = x_norm
+
     return (
-        _SplitDataset(X[i_train], y[i_train]),
-        _SplitDataset(X[i_val],   y[i_val]),
-        _SplitDataset(X[i_test],  y[i_test]),
+        _SplitDataset(X_train_norm, y[i_train]),
+        _SplitDataset(X_val_norm,   y[i_val]),
+        _SplitDataset(X_test_norm,  y[i_test]),
         split_dfs,
+        scaler,
     )
 
 
@@ -112,7 +139,16 @@ def train(
         raise ValueError("train_ratio + val_ratio must be < 1.0 to leave room for a test set")
 
     df = pd.read_csv(csv_path)
-    train_ds, val_ds, test_ds, split_dfs = _split_dataframe(
+    n_before = len(df)
+    df = df.dropna()
+    n_dropped = n_before - len(df)
+    if n_dropped:
+        msg = f"Dropped {n_dropped} rows with NaN values ({n_before} → {len(df)} rows)"
+        print(msg)
+        if progress_callback:
+            progress_callback({"type": "log", "message": msg})
+
+    train_ds, val_ds, test_ds, split_dfs, scaler = _split_dataframe(
         df, label_column, train_ratio, val_ratio, seed
     )
 
@@ -121,11 +157,13 @@ def train(
     if progress_callback:
         progress_callback({"type": "log", "message": split_msg})
 
-    train_loader = DataLoader(train_ds, batch_size=32, shuffle=True)
+    g = torch.Generator()
+    g.manual_seed(seed)
+    train_loader = DataLoader(train_ds, batch_size=32, shuffle=True, generator=g)
     val_loader   = DataLoader(val_ds,   batch_size=32)
     test_loader  = DataLoader(test_ds,  batch_size=32)
 
-    device = torch.device("cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)

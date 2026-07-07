@@ -1,3 +1,5 @@
+import os
+import random
 import numpy as np
 import pandas as pd
 import aidge_core
@@ -7,6 +9,10 @@ import aidge_backend_cpu
 import aidge_quantization
 import onnx
 from sklearn.metrics import r2_score
+
+_GLOBAL_SEED = int(os.getenv("QUANT_SEED", "42"))
+random.seed(_GLOBAL_SEED)
+np.random.seed(_GLOBAL_SEED)
 
 # --------------------------------------------------------------------------
 # Quantization constants (int8)
@@ -47,17 +53,21 @@ class PipelineConfig:
     # Quantization pipeline
     # ------------------------------------------------------------------
 
-    def _propagate(self, model, scheduler, sample_fp32):
-        """Run one forward pass with a float32 array (int8-scale values)."""
-        input_tensor = aidge_core.Tensor(np.array(sample_fp32, dtype=np.float32))
-        input_tensor.set_backend('cpu')
-        input_tensor.set_datatype(aidge_core.dtype.float32)
+    def _propagate(self, model, scheduler, sample_int8_scale):
+        """Run one forward pass with values already in int8 scale (rounded and clipped)."""
+        arr = np.round(sample_int8_scale).clip(-127, 127).astype(np.float32)
+        input_tensor = aidge_core.Tensor(arr)
+        input_tensor.to_dtype(aidge_core.dtype.int8)
         scheduler.forward(True, data=[input_tensor])
-        output_node = model.get_output_nodes().pop()
+        output_node = model.get_ordered_outputs()[0][0]
         out = np.array(output_node.get_operator().get_output(0)).copy()
         return out
 
-    def quant(self):
+    def quant(self, calib_csv=None):
+        _seed = _GLOBAL_SEED
+        random.seed(_seed)
+        np.random.seed(_seed)
+
         aidge_model = aidge_onnx.load_onnx(self.model_path)
         aidge_core.remove_flatten(aidge_model)
         aidge_core.fuse_batchnorm(aidge_model)
@@ -65,14 +75,35 @@ class PipelineConfig:
         aidge_model.set_datatype(aidge_core.dtype.float32)
         aidge_model.set_backend('cpu')
 
-        df_calib = pd.read_csv(self.train_csv)
+        df_calib = pd.read_csv(calib_csv if calib_csv is not None else self.train_csv)
         inputs   = df_calib.drop(columns=[self.label]).values
-        n_calib  = min(6, len(inputs))
-        rng      = np.random.default_rng(42)
+        targets  = df_calib[self.label].values
+        n_calib  = min(int(os.getenv("QUANT_CALIB_SAMPLES", "64")), len(inputs))
+        rng      = np.random.default_rng(_seed)
         indices  = rng.choice(len(inputs), size=n_calib, replace=False)
 
-        self._input_scale  = float(UPSCALE)          # 127
-        self._output_scale = 1.0 / float(UPSCALE)    # 1/127
+        calib_inputs = inputs[indices]
+
+        max_abs_input = float(np.max(np.abs(calib_inputs)))
+        self._input_scale = float(UPSCALE) / max_abs_input if max_abs_input > 0 else float(UPSCALE)
+
+        sched_float = aidge_core.SequentialScheduler(aidge_model)
+        sched_float.generate_scheduling()
+        max_abs_output_model = 0.0
+        float_preds = []
+        for i in indices:
+            sample_np = inputs[i].reshape(self.input_shape)
+            t = aidge_core.Tensor(np.array(sample_np, dtype=np.float32))
+            t.set_backend('cpu')
+            t.set_datatype(aidge_core.dtype.float32)
+            sched_float.forward(True, data=[t])
+            out_node = aidge_model.get_ordered_outputs()[0][0]
+            pred = float(np.array(out_node.get_operator().get_output(0)).item())
+            float_preds.append(pred)
+            max_abs_output_model = max(max_abs_output_model, abs(pred))
+        self._output_scale = max_abs_output_model / float(UPSCALE) if max_abs_output_model > 0 else 1.0 / float(UPSCALE)
+
+        float_preds = np.array(float_preds)
 
         calibration_set = []
         for i in indices:
@@ -96,8 +127,8 @@ class PipelineConfig:
         aidge_quantization.quantize_network(
             network=aidge_model,
             calibration_set=calibration_set,
-            clipping_mode=aidge_quantization.Clipping.MSE,
-            single_shift=True,
+            clipping_mode=aidge_quantization.Clipping.MAX,
+            single_shift=True
         )
 
         return aidge_model
@@ -116,18 +147,19 @@ class PipelineConfig:
             y_true = df.iloc[:, -1].values.astype(np.float64)
             
         quant_model.set_backend('cpu')
-        quant_model.forward_dtype()
 
         scheduler = aidge_core.SequentialScheduler(quant_model)
         scheduler.generate_scheduling()
 
+        raw_outputs = []
         y_pred = []
         for i in range(len(X)):
-            # Pre-scale to int8 range, stored as float32 — same approach as quantize_model.py
-            scaled = np.round(X[i] * self._input_scale).astype(np.float32)
-            sample = scaled.reshape(self.input_shape)
-            out = self._propagate(quant_model, scheduler, sample)
-            y_pred.append(float(out.item()) / float(UPSCALE))
+            sample = (X[i] * self._input_scale).reshape(self.input_shape).astype(np.float32)
+            raw = float(self._propagate(quant_model, scheduler, sample).item())
+            raw_outputs.append(raw)
+            y_pred.append(raw * self._output_scale)
+
+        raw_arr = np.array(raw_outputs)
 
         y_pred = np.array(y_pred, dtype=np.float64)
 

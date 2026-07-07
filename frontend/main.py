@@ -10,7 +10,7 @@ from confluent_kafka import Consumer as KafkaConsumer
 from confluent_kafka import Producer
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 from fastapi.staticfiles import StaticFiles
 from minio import Minio
 from minio.error import S3Error
@@ -117,7 +117,6 @@ async def submit_job(
     label_column: str = Form(...),
     patience: int = Form(10),
     max_epochs: int = Form(500),
-    weights: UploadFile = File(None),
 ):
     try:
         params = json.loads(model_params)
@@ -141,14 +140,6 @@ async def submit_job(
         _put(minio, "datasets", dataset.filename, dataset_bytes, "text/csv")
         logger.info("Dataset caricato: datasets/%s", dataset.filename)
 
-        weights_key = None
-        if weights and weights.filename:
-            weights_bytes = await weights.read()
-            if weights_bytes:
-                weights_key = weights.filename
-                _put(minio, "weights", weights_key, weights_bytes)
-                logger.info("Pesi caricati: weights/%s", weights_key)
-
     except S3Error as e:
         logger.error("Errore MinIO: %s", e)
         raise HTTPException(status_code=500, detail=f"Errore upload MinIO: {e}")
@@ -163,9 +154,6 @@ async def submit_job(
         "patience": patience,
         "max_epochs": max_epochs,
     }
-    if weights_key:
-        job["weights"] = weights_key
-
     producer = _kafka_producer()
     producer.produce(
         topic=os.environ.get("KAFKA_TOPIC_IN", "train-jobs"),
@@ -176,6 +164,25 @@ async def submit_job(
 
     logger.info("Job %s sottomesso con successo", job_id)
     return {"job_id": job_id, "status": "submitted"}
+
+
+@app.get("/api/download/{job_id}")
+async def download_export(job_id: str):
+    """Download the C++ export archive for a given job."""
+    minio = _minio()
+    object_name = f"{job_id}/export_cpp.tar.gz"
+    try:
+        obj = minio.get_object("exports", object_name)
+        data = obj.read()
+        obj.close()
+        obj.release_conn()
+        return Response(
+            content=data,
+            media_type="application/gzip",
+            headers={"Content-Disposition": f'attachment; filename="export_{job_id}.tar.gz"'},
+        )
+    except S3Error as e:
+        raise HTTPException(status_code=404, detail=f"Export archive not found: {e}")
 
 
 @app.get("/api/progress/{job_id}")
