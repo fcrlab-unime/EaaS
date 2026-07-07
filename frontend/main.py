@@ -10,7 +10,7 @@ from confluent_kafka import Consumer as KafkaConsumer
 from confluent_kafka import Producer
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 from fastapi.staticfiles import StaticFiles
 from minio import Minio
 from minio.error import S3Error
@@ -164,6 +164,25 @@ async def submit_job(
 
     logger.info("Job %s sottomesso con successo", job_id)
     return {"job_id": job_id, "status": "submitted"}
+
+
+@app.get("/api/download/{job_id}")
+async def download_export(job_id: str):
+    """Download the C++ export archive for a given job."""
+    minio = _minio()
+    object_name = f"{job_id}/export_cpp.tar.gz"
+    try:
+        obj = minio.get_object("exports", object_name)
+        data = obj.read()
+        obj.close()
+        obj.release_conn()
+        return Response(
+            content=data,
+            media_type="application/gzip",
+            headers={"Content-Disposition": f'attachment; filename="export_{job_id}.tar.gz"'},
+        )
+    except S3Error as e:
+        raise HTTPException(status_code=404, detail=f"Export archive not found: {e}")
 
 
 @app.get("/api/progress/{job_id}")

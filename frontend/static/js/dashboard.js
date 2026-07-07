@@ -401,7 +401,7 @@ document.getElementById('jobForm').addEventListener('submit', async function (e)
     showError(result, `Network error: ${err.message}`);
   } finally {
     btn.disabled = false;
-    btn.textContent = 'Start Training';
+    btn.textContent = 'Start';
   }
 });
 
@@ -429,6 +429,12 @@ function startProgress(jobId) {
   document.getElementById('metricsBlock').classList.add('hidden');
   document.getElementById('quantMetricsBlock').classList.add('hidden');
   document.getElementById('quantMetricsGrid').innerHTML = '';
+  document.getElementById('espOutputBlock').classList.add('hidden');
+  document.getElementById('espRawOutput').textContent = '';
+  document.getElementById('espDequantBlock').classList.add('hidden');
+  document.getElementById('espDequantGrid').innerHTML = '';
+  document.getElementById('downloadBlock').classList.add('hidden');
+  document.getElementById('downloadBtn').href = '#';
   document.getElementById('logConsole').innerHTML = '';
   document.getElementById('epochBarFill').style.width = '0%';
 
@@ -473,17 +479,19 @@ function _handleEvent(ev) {
     _showQuantMetrics(data.quant_metrics);
   }
 
+  if (type === 'stage' && data && data.export_archive) {
+    _showDownloadButton(ev.job_id);
+    _appendLog({ type: 'log', message: `Export archive: exports/${data.export_archive}` });
+  }
+
   if (stage === 'quantization' || stage === 'export' || stage === 'flash') {
     document.getElementById('epochProgress').classList.add('hidden');
   }
 
   if (type === 'done') {
     document.getElementById('epochProgress').classList.add('hidden');
-    if (data && data.export_archive) {
-      _appendLog({ type: 'log', message: `Export archive: exports/${data.export_archive}` });
-    }
     if (data && data.serial_output) {
-      _appendLog({ type: 'stage', message: `ESP32 Output:\n${data.serial_output}` });
+      _showEspOutput(data.serial_output);
     }
     if (_sse) { _sse.close(); }
   }
@@ -564,6 +572,54 @@ function _showMetrics(metrics) {
       <div class="metric-value">${typeof val === 'number' ? val.toFixed(4) : val}</div>
     </div>`).join('');
   document.getElementById('metricsBlock').classList.remove('hidden');
+}
+
+function _showDownloadButton(jobId) {
+  const btn = document.getElementById('downloadBtn');
+  btn.href = `/api/download/${jobId}`;
+  document.getElementById('downloadBlock').classList.remove('hidden');
+}
+
+const _ESP_RESCALING = 127;
+
+function _parseEspInferenceValues(serial_output) {
+  // Aidge template prints: std::printf("%hhd ", output[i]) → space-separated int8 on one line
+  const lines = serial_output.split(/\r?\n/);
+  const results = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    // Accept lines made ONLY of integers (int8 output, space-separated), no surrounding text
+    if (!/^-?\d+(\s+-?\d+)*$/.test(trimmed)) continue;
+    const nums = trimmed.split(/\s+/).map(Number);
+    if (nums.length > 0 && nums.every(n => Number.isInteger(n) && n >= -128 && n <= 127)) {
+      results.push(...nums);
+    }
+  }
+  return results;
+}
+
+function _showEspOutput(serial_output) {
+  const block = document.getElementById('espOutputBlock');
+  const rawPre = document.getElementById('espRawOutput');
+  const deqBlock = document.getElementById('espDequantBlock');
+  const deqGrid = document.getElementById('espDequantGrid');
+
+  // Filter out null bytes and normalize
+  const cleaned = serial_output.replace(/\0/g, '').trim();
+  rawPre.textContent = cleaned;
+  block.classList.remove('hidden');
+
+  const values = _parseEspInferenceValues(cleaned);
+  if (values.length > 0) {
+    deqGrid.innerHTML = values.map((v, i) => `
+      <div class="metric-card">
+        <div class="metric-name">Output[${i}]</div>
+        <div class="metric-value">${(v / _ESP_RESCALING).toFixed(6)}</div>
+        <div class="metric-raw">(raw: ${v})</div>
+      </div>`).join('');
+    deqBlock.classList.remove('hidden');
+  }
 }
 
 function _showQuantMetrics(metrics) {
