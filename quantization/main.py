@@ -86,16 +86,10 @@ def handle_job(job: dict):
         # --- 2b. DOWNLOAD TEST SPLIT (used as calibration set) ---
         test_split_key = job.get("test_split")
         test_local = None
-        if test_split_key:
-            test_local = str(base_dir / "test.csv")
-            download(minio, "datasets", test_split_key, test_local)
-            logger.info(f"Test split downloaded: datasets/{test_split_key}")
-            test_df = pd.read_csv(test_local)
-            send_progress(job_id, "log", "quantization",
-                          f"Calibration dataset (test set): {test_df.shape[0]} samples, {test_df.shape[1]} columns")
-        else:
-            send_progress(job_id, "log", "quantization",
-                          f"Calibration dataset (train set): {dataset_df.shape[0]} samples, {dataset_df.shape[1]} columns")
+        test_local = str(base_dir / "test.csv")
+        download(minio, "datasets", test_split_key, test_local)
+        logger.info(f"Test split downloaded: datasets/{test_split_key}")
+        test_df = pd.read_csv(test_local)
 
         # --- 3. QUANTIZATION ---
         send_progress(job_id, "log", "quantization", "Quantization in progress...")
@@ -105,7 +99,7 @@ def handle_job(job: dict):
             label=label_column,
         )
 
-        quant_model = cfg.quant(calib_csv=test_local)
+        quant_model = cfg.quant(calib_csv=train_local)
 
         aidge_core.aidge_save.save_model(quant_model, str(base_dir / "model_quant"))
         send_progress(job_id, "log", "quantization", "Quantization complete")
