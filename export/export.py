@@ -7,9 +7,8 @@ import aidge_core
 import aidge_backend_cpu
 import aidge_export_cpp
 import aidge_core.aidge_save
-from aidge_core.export_utils import generate_main_cpp, scheduler_export
+from aidge_core.export_utils import generate_main_cpp, scheduler_export, set_nodes_names
 from aidge_core.mem_info import generate_optimized_memory_info
-from aidge_export_cpp.export_utils import cpp_fuse_to_metaops, set_nodes_names
 from aidge_export_cpp import ExportLibCpp
 
 _NB_BITS = 8
@@ -45,8 +44,11 @@ class ExportPipeline:
         input_tensor.to_backend("cpu")
         input_tensor.to_dtype(aidge_core.dtype.int8)
 
-        # Fuse nodes per il backend CPP
-        cpp_fuse_to_metaops(model)
+        for mop in ExportLibCpp._fusion_list:
+            recipe = ExportLibCpp._fusion_registry[mop]
+            aidge_core.fuse_to_metaops(
+                model, recipe, mop, lambda g: g.set_attr_inputs_last()
+            )
 
         scheduler = aidge_core.SequentialScheduler(model)
         scheduler.generate_scheduling()
@@ -83,7 +85,6 @@ class ExportPipeline:
         scheduler_export(
             scheduler,
             export_folder,
-            ExportLibCpp,
             memory_manager=generate_optimized_memory_info,
             memory_manager_args={
                 "stats_folder": str(export_folder / "stats"),
@@ -93,18 +94,5 @@ class ExportPipeline:
         )
 
         generate_main_cpp(export_folder, model, inputs_tensor=[input_tensor])
-
-        for line in aidge_core.utils.run_command(
-            ["make", "SAVE_OUTPUTS=false"], cwd=export_folder
-        ):
-            print(line, end="")
-
-        try:
-            for line in aidge_core.utils.run_command(
-                ["./bin/run_export"], cwd=export_folder
-            ):
-                print(line, end="")
-        except Exception as e:
-            print(f"Warning: binary verification failed: {e}")
 
         return export_folder
