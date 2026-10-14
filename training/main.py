@@ -7,6 +7,8 @@ import tarfile
 import torch
 import shutil
 import datetime
+import hashlib
+import pandas as pd
 from pathlib import Path
 from confluent_kafka import Producer as KafkaProducer
 from kafka_consumer import make_consumer, consume_loop, send_kafka_message
@@ -87,6 +89,12 @@ def handle_job(job: dict):
         dataset_local = str(base_dir / job["dataset"])
         download(minio, "datasets", job["dataset"], dataset_local)
 
+        header = pd.read_csv(dataset_local, nrows=0).columns
+        label = job.get("label_column") or header[-1]
+        feature_count = len([c for c in header if c != label])
+        if model_params.get("input_channels") != feature_count:
+            raise ValueError(f"input_channels must be {feature_count} for the selected input columns")
+
         # --- 2. MODEL INSTANTIATION ---
         ModelClass = load_model_class(str(script_path), class_name)
         model = ModelClass(**model_params)
@@ -105,7 +113,7 @@ def handle_job(job: dict):
             else:
                 send_progress(job_id, "log", "training", event["message"])
 
-        model, test_metrics, split_dfs = train(
+        model, test_metrics, split_dfs, deployment = train(
             model,
             dataset_local,
             patience=job.get("patience", 10),
@@ -132,10 +140,18 @@ def handle_job(job: dict):
             upload(minio, "datasets", minio_split_key, str(split_local))
             logger.info(f"Split '{split_name}' uploaded to datasets/{minio_split_key}")
 
+        deployment["job_id"] = job_id
+        deployment["dataset_sha256"] = hashlib.sha256(Path(dataset_local).read_bytes()).hexdigest()
+        deployment_local = base_dir / "deployment.json"
+        deployment_local.write_text(json.dumps(deployment, allow_nan=False))
+        upload(minio, "datasets", f"{job_id}/deployment.json", str(deployment_local))
+
         # --- 6. ONNX EXPORT ---
         import onnx as _onnx
         onnx_path = base_dir / "model.onnx"
         torch.manual_seed(int(os.environ.get("TRAINING_SEED", "42")))
+        if model_params["input_channels"] != len(deployment["feature_names"]):
+            raise ValueError("input_channels must match the number of input features")
         dummy_input = torch.randn(1, model_params["input_channels"], 1)
         torch.onnx.export(
             model,
@@ -172,6 +188,7 @@ def handle_job(job: dict):
             "test_split": f"{job_id}/test.csv",
             "label_column": job.get("label_column"),
             "test_metrics": test_metrics,
+            "deployment": f"{job_id}/deployment.json",
         }
         send_kafka_message(quantizer_request)
         logger.info(f"Quantization request sent for job {job_id}")

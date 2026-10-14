@@ -80,6 +80,9 @@ def _split_dataframe(df: pd.DataFrame, label_column, train_ratio, val_ratio, see
         "test":  make_df(i_test),
     }
 
+    split_dfs["test"].attrs["raw"] = split_dfs["test"].copy()
+    split_dfs["test"].attrs["source_rows"] = df.index[i_test].tolist()
+
     X = X_df.values
 
     scaler = MinMaxScaler()
@@ -131,7 +134,8 @@ def train(
     Returns:
         model       — best checkpoint restored
         metrics     — dict with MAE, MSE, RMSE, R² evaluated on the test set
-        split_dfs   — dict {"train": df, "val": df, "test": df}
+        split_dfs   — normalized train/val/test dataframes
+        deployment  — scaler coefficients, feature order and raw test examples
     """
     seed = apply_reproducibility()
 
@@ -253,4 +257,27 @@ def train(
     if progress_callback:
         progress_callback({"type": "log", "message": test_msg})
 
-    return model, metrics, split_dfs
+    label = split_dfs["test"].columns[-1]
+    raw_test = split_dfs["test"].attrs["raw"]
+    # Cover both sides of the LED threshold and its immediate neighbourhood.
+    positions = list(dict.fromkeys([
+        *[int(np.argmin(np.abs(raw_test[label].values - target))) for target in (79, 80, 81)],
+        int(raw_test[label].argmin()), int(raw_test[label].argmax()),
+        *np.argsort(np.abs(raw_test[label].values - 80))[:8].tolist(),
+    ]))
+    deployment = {
+        "version": 1,
+        "feature_names": list(raw_test.columns[:-1]),
+        "label": label,
+        "scale": scaler.scale_.tolist(),
+        "offset": scaler.min_.tolist(),
+        "split": {"seed": seed, "train_ratio": train_ratio, "val_ratio": val_ratio},
+        "threshold": 80.0,
+        "test_samples": [
+            {"test_index": i, "source_row": split_dfs["test"].attrs["source_rows"][i],
+             "values": raw_test.iloc[i, :-1].astype(float).tolist(),
+             "expected_soh": float(raw_test.iloc[i][label])}
+            for i in positions
+        ],
+    }
+    return model, metrics, split_dfs, deployment

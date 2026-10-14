@@ -23,6 +23,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN cd aidge \
     && ./setup.sh -m aidge_core -m aidge_backend_cpu -m aidge_export_cpp
 
-COPY . .
+COPY main.py export.py kafka_consumer.py minio_client.py ./
 
 CMD ["python", "main.py"]

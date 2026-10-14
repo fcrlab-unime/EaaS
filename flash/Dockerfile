@@ -16,6 +16,7 @@ RUN /opt/esp/python_env/idf5.4_py3.12_env/bin/pip install --no-cache-dir \
 
 WORKDIR /app
 
-COPY main.py kafka_consumer.py minio_client.py ./
+COPY main.py kafka_consumer.py minio_client.py uart_bridge.py ./
+COPY templates ./templates
 
 CMD ["/bin/bash", "-c", ". /opt/esp/idf/export.sh && python3 main.py"]

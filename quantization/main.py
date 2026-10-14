@@ -121,6 +121,13 @@ def handle_job(job: dict):
                 send_progress(job_id, "log", "quantization",
                               f"Post-quant metrics unavailable: {exc}")
 
+        deployment_local = base_dir / "deployment.json"
+        download(minio, "datasets", job["deployment"], str(deployment_local))
+        deployment = json.loads(deployment_local.read_text())
+        deployment.update(input_multiplier=127.0, output_format="soh_float")
+        deployment_local.write_text(json.dumps(deployment, allow_nan=False))
+        upload(minio, "datasets", job["deployment"], str(deployment_local))
+
         # --- 4. UPLOAD QUANTIZED MODEL ---
         minio_export_dest = f"quantized_models/{job_id}/model_quant.aidge"
         upload(minio, "quantized-models", minio_export_dest, str(base_dir / "model_quant.aidge"))
@@ -132,6 +139,7 @@ def handle_job(job: dict):
             "train_split": train_split_key,
             "test_split":  test_split_key,
             "label_column": label_column,
+            "deployment": job["deployment"],
         }
         send_kafka_message(os.environ["KAFKA_TOPIC_OUT"], export_request)
         logger.info(f"Export request sent for job {job_id}")

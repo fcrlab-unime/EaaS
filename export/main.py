@@ -60,7 +60,7 @@ def handle_job(job: dict):
     C++ export pipeline:
     1. Download quantized model (.aidge) from MinIO
     2. Download test split
-    3. Generate and compile C++ export
+    3. Generate C++ export
     4. Upload tar.gz archive to MinIO
     5. Notify export-done topic
     """
@@ -87,6 +87,10 @@ def handle_job(job: dict):
         download(minio, "datasets", split_key, split_local)
         logger.info(f"Split downloaded: datasets/{split_key}")
 
+        deployment_local = base_dir / "deployment.json"
+        download(minio, "datasets", job["deployment"], str(deployment_local))
+        deployment = json.loads(deployment_local.read_text())
+
         # --- 3. C++ EXPORT ---
         send_progress(job_id, "log", "export", "Generating C++ code...")
         export_folder = base_dir / "export_cpp"
@@ -94,10 +98,11 @@ def handle_job(job: dict):
             model_path=str(base_dir / "model_quant.aidge"),
             test_csv=split_local,
             label=label_column,
+            deployment=deployment,
         )
         pipeline.run(export_folder)
         logger.info(f"C++ export complete: {export_folder}")
-        send_progress(job_id, "log", "export", "C++ code generated. Compiling...")
+        send_progress(job_id, "log", "export", "C++ code generated. Packaging export...")
 
         # --- 4. ARCHIVE AND UPLOAD ---
         _ensure_bucket(minio, _EXPORT_BUCKET)

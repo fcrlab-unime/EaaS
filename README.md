@@ -41,7 +41,7 @@ storage). Progress and logs from all stages are streamed live to the browser.
 | Frontend | `frontend/` | — | `train-jobs` | Web UI: upload model script + dataset, submit a job, watch live progress |
 | Training | `training/` | `train-jobs` | `quant-jobs` | Trains the model, splits the dataset, exports ONNX |
 | Quantization | `quantization/` | `quant-jobs` | `export-jobs` | int8-quantizes the ONNX model with Aidge, using the training set for calibration |
-| Export | `export/` | `export-jobs` | `export-done` | Generates and compiles standalone C++ inference code from the quantized model |
+| Export | `export/` | `export-jobs` | `export-done` | Generates standalone C++ inference code from the quantized model |
 | Flash | `flash/` | `export-done` | `flash-done` | Wraps the C++ export into an ESP-IDF project, builds it, and flashes it to an ESP32 over serial |
 
 All topic names, MinIO credentials and other per-service settings are
@@ -80,8 +80,7 @@ configured through each service's `.env` file (see `training/.env`,
    `export-jobs`.
 4. **Export** (`export/main.py`, `export/export.py`) — downloads the
    quantized model, generates standalone C++ inference code via Aidge's C++
-   export backend, compiles and smoke-tests the binary, archives the result
-   as a `.tar.gz`, uploads it, and publishes a job to `export-done`.
+   export backend, archives the generated project as a `.tar.gz`, uploads it, and publishes a job to `export-done`.
 5. **Flash** (`flash/main.py`) — downloads and extracts the C++ export,
    wraps it into an ESP-IDF project (patching Aidge-generated sources for
    ESP32 compatibility), builds it with `idf.py build`, flashes it to the
@@ -121,7 +120,7 @@ To use it:
 
 1. Open the frontend at http://localhost:8080.
 2. Upload your model script (a `.py` file defining a `torch.nn.Module`
-   subclass — see `CCN1D.py` for an example 1D CNN) and pick the detected
+   subclass — see `sample/CCN1D.py` for an example 1D CNN) and pick the detected
    class name.
 3. Fill in the constructor parameters (auto-detected from the class
    signature when possible).
@@ -155,3 +154,101 @@ Every service reads its settings from an `.env` file in its own folder
   quantization.
 * `IDF_TARGET`, `FLASH_PORT`, `FLASH_BAUD`, `IDF_PATH`, `SERIAL_READ_SECS` —
   ESP-IDF build/flash target and serial settings (`flash/.env`).
+
+## Continuous EIS inference and RGB LED
+
+New training jobs export `datasets/<job_id>/deployment.json`: the exact feature
+order, fitted MinMaxScaler coefficients (`scale` and `offset`), split seed,
+dataset hash and raw held-out test examples with their true SOH. Quantization
+adds its input/output contract; export includes this metadata and a generated
+`model_adapter.hpp` in the archive.
+
+For `sample/df_clean.csv`, select `soh` as target and set `input_channels`
+to the number of remaining columns. All columns except the target are used as
+inputs; there is no column-exclusion setting. To omit an identifier such as
+`cell`, remove it from the CSV before uploading it. A CSV with 60 interleaved
+real/imaginary EIS pairs plus `temperature` has 121 inputs. Frequency positions
+must match the training dataset. Retrain the model whenever input columns change.
+
+The ESP-IDF application is maintained in `flash/templates/main.cpp`, rather than
+patching Aidge's desktop smoke-test main. It continuously accepts newline-ended
+CSV frames of raw features over UART, with exactly the exported feature count.
+Each feature is transformed as:
+
+```text
+normalized[i] = raw[i] * scale[i] + offset[i]
+input_int8[i] = round_to_even(clamp(normalized[i] * 127, -127, 127))
+```
+
+Aidge is configured with `rescale_inputs=False` and `dequantize=True`: the graph
+reconstructs the scalar SOH in its original target units. It is not divided by
+127 in the frontend. The target is expected to be SOH in percent (0–100).
+Predicted SOH **≤ 80** lights red; **> 80** lights green. LEDs are off before the
+first valid inference and after an invalid frame. The last valid colour remains
+until the next frame. Invalid counts, non-finite values and oversized frames are
+rejected; quantization saturation is reported in the response.
+
+UART defaults to UART0, TX GPIO1/RX GPIO3, 115200 baud, 8N1, through the FireBeetle's
+USB-to-serial bridge. The application console is disabled to keep application
+logs out of the protocol; ROM/bootloader messages can still appear at reset.
+Send `HELLO\n` to get the firmware job ID and feature count. Responses are JSON
+lines, for example:
+
+```json
+{"type":"inference","job_id":"a1b2c3d4","soh":78.3,"color":"red","clipped_features":0}
+```
+
+The DFRobot FireBeetle ESP32-E V1.0 (DFR0654) has an onboard WS2812 RGB LED
+on GPIO5/D8. The firmware drives this LED through ESP-IDF's RMT peripheral,
+sending one GRB pixel followed by a 300 us reset pulse; no external LED or
+additional downloaded component is needed. See the
+[DFRobot onboard RGB documentation](https://wiki.dfrobot.com/dfr0654/docs/23253).
+
+The default active-channel brightness is 32 out of 255. Copy the desired
+`LED_RGB_GPIO=5` and `LED_BRIGHTNESS=32` settings from
+`flash/firmware.env.example` into `flash/.env` before building/flashing a new job.
+These settings are compiled into the firmware. The previous external-LED
+settings (`LED_RED_GPIO`, `LED_GREEN_GPIO`, `LED_BLUE_GPIO`, `LED_ACTIVE_LOW`)
+are no longer used and can be removed from `flash/.env`.
+
+After updating the UART panel/bridge, rebuild and restart only their services:
+
+```bash
+docker compose up -d --build --no-deps frontend flash-service
+```
+
+This does not rebuild Aidge or change the firmware. An already flashed UART
+firmware can be used immediately. In the frontend panel **Battery health check**:
+
+1. Wait for flashing to finish, close other serial monitors, then click
+   **Connect ESP32**. The server opens the USB port on the Docker host, reads
+   the firmware job ID and loads that job's raw test examples.
+2. Choose a curve and click **Check battery health**. Its input values are
+   filled in automatically.
+3. Use **Repeat all curves** to cycle through the test examples; **Stop** ends
+   the replay. Compare the estimated SOH with the known battery health.
+4. Under **Use a custom curve**, upload a TXT or CSV file containing one curve,
+   or paste comma-separated original measurements into **Curve values**.
+   Headered CSV columns are reordered to the model's input order. Without a
+   header, values must already be in that order. Click **Check battery health**
+   to send the curve. The target is not required; every input column is required.
+   You can also load samples by model ID or download the deployment metadata.
+
+The browser uses the frontend HTTP API, which forwards requests to the UART
+bridge inside the flash service. No Web Serial/browser permission, HTTPS or
+special browser is required for UART access: the ESP32 must be attached to the
+Docker host. The bridge API is internal to the Docker network (port 8081 is not
+published on the host). It validates firmware job ID and feature count, rejects
+malformed curves, and invalidates the connection on timeout or board reset.
+The flash service closes the bridge connection before each flash job and blocks
+UART requests until the job, including serial capture, finishes. Reconnect from
+the panel afterwards.
+
+By default the bridge uses `FLASH_PORT` and `INFERENCE_UART_BAUD` (115200).
+`INFERENCE_SERIAL_PORT` can select another mapped device. If you customize the
+internal API port with `UART_API_PORT`, set `FLASH_SERVICE_URL` in the frontend
+environment accordingly (default `http://flash-service:8081`).
+
+Static reference frames generated from the default deterministic split are in
+[examples/uart](examples/uart/README.md); the frontend's job-specific samples are
+authoritative.

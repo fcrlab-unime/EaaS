@@ -27,9 +27,9 @@ class PipelineConfig:
         self.train_csv   = train_csv
         self.input_shape = self._infer_input_shape()
 
-        # Scaling factors computed in quant() on the float model
-        self._input_scale  = 1.0   # UPSCALE / max_abs_feature_calib
-        self._output_scale = 1.0   # max_abs_output_calib / UPSCALE
+        # Input quantization multiplier and output conversion.
+        self._input_scale  = float(UPSCALE)
+        self._output_scale = 1.0   # output is dequantized inside the graph
 
         if label is None:
             df_header  = pd.read_csv(train_csv, nrows=1)
@@ -77,33 +77,14 @@ class PipelineConfig:
 
         df_calib = pd.read_csv(calib_csv if calib_csv is not None else self.train_csv)
         inputs   = df_calib.drop(columns=[self.label]).values
-        targets  = df_calib[self.label].values
         n_calib  = min(int(os.getenv("QUANT_CALIB_SAMPLES", "64")), len(inputs))
         rng      = np.random.default_rng(_seed)
         indices  = rng.choice(len(inputs), size=n_calib, replace=False)
 
-        calib_inputs = inputs[indices]
-
-        max_abs_input = float(np.max(np.abs(calib_inputs)))
-        self._input_scale = float(UPSCALE) / max_abs_input if max_abs_input > 0 else float(UPSCALE)
-
-        sched_float = aidge_core.SequentialScheduler(aidge_model)
-        sched_float.generate_scheduling()
-        max_abs_output_model = 0.0
-        float_preds = []
-        for i in indices:
-            sample_np = inputs[i].reshape(self.input_shape)
-            t = aidge_core.Tensor(np.array(sample_np, dtype=np.float32))
-            t.set_backend('cpu')
-            t.set_datatype(aidge_core.dtype.float32)
-            sched_float.forward(True, data=[t])
-            out_node = aidge_model.get_ordered_outputs()[0][0]
-            pred = float(np.array(out_node.get_operator().get_output(0)).item())
-            float_preds.append(pred)
-            max_abs_output_model = max(max_abs_output_model, abs(pred))
-        self._output_scale = max_abs_output_model / float(UPSCALE) if max_abs_output_model > 0 else 1.0 / float(UPSCALE)
-
-        float_preds = np.array(float_preds)
+        # rescale_inputs=False: Aidge expects normalized inputs multiplied by 127.
+        self._input_scale = float(UPSCALE)
+        # Dequantization is embedded in the graph, using Aidge's exact factors.
+        self._output_scale = 1.0
 
         calibration_set = []
         for i in indices:
@@ -128,7 +109,9 @@ class PipelineConfig:
             network=aidge_model,
             calibration_set=calibration_set,
             clipping_mode=aidge_quantization.Clipping.MAX,
-            single_shift=True
+            single_shift=True,
+            rescale_inputs=False,
+            dequantize=True
         )
 
         return aidge_model

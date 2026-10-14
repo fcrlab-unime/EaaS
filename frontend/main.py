@@ -1,9 +1,12 @@
 import asyncio
+import csv
 import io
 import json
 import logging
 import os
 import uuid
+import urllib.request
+import urllib.error
 from collections import defaultdict
 
 from confluent_kafka import Consumer as KafkaConsumer
@@ -123,6 +126,9 @@ async def submit_job(
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="model_params non è un JSON valido")
 
+    if not isinstance(params, dict):
+        raise HTTPException(status_code=400, detail="model_params must be a JSON object")
+
     if patience < 1:
         raise HTTPException(status_code=400, detail="patience deve essere almeno 1")
     if max_epochs < 1:
@@ -137,6 +143,12 @@ async def submit_job(
         logger.info("Script caricato: models/%s", model_script.filename)
 
         dataset_bytes = await dataset.read()
+        columns = next(csv.reader(io.StringIO(dataset_bytes.decode("utf-8-sig"))), [])
+        if label_column not in columns:
+            raise HTTPException(400, "Select a target column present in the dataset")
+        features = [c for c in columns if c != label_column]
+        if params.get("input_channels") != len(features):
+            raise HTTPException(400, f"input_channels must be {len(features)} for the selected features")
         _put(minio, "datasets", dataset.filename, dataset_bytes, "text/csv")
         logger.info("Dataset caricato: datasets/%s", dataset.filename)
 
@@ -219,3 +231,41 @@ async def job_progress(job_id: str, request: Request):
     )
 
 
+@app.get("/api/deployment/{job_id}")
+def deployment_metadata(job_id: str):
+    """Raw held-out examples and scaler from this exact training job."""
+    try:
+        obj = _minio().get_object("datasets", f"{job_id}/deployment.json")
+        try:
+            return json.loads(obj.read())
+        finally:
+            obj.close()
+            obj.release_conn()
+    except S3Error:
+        raise HTTPException(404, "Deployment metadata unavailable: run a new training job")
+
+
+@app.api_route("/api/uart/{action}", methods=["GET", "POST"])
+async def uart_proxy(action: str, request: Request):
+    """The board is attached to the flash host, not the browser's computer."""
+    expected_method = "GET" if action == "status" else "POST"
+    if action not in {"status", "connect", "disconnect", "send"} or request.method != expected_method:
+        raise HTTPException(404, "Endpoint UART non trovato")
+    data = None
+    if request.method == "POST":
+        data = await request.body()
+        if len(data) > 131072:
+            raise HTTPException(400, "Richiesta troppo grande")
+    base = os.getenv("FLASH_SERVICE_URL", "http://flash-service:8081").rstrip("/")
+
+    def forward():
+        upstream = urllib.request.Request(f"{base}/{action}", data=data,
+                                          headers={"Content-Type": "application/json"}, method=request.method)
+        try:
+            with urllib.request.urlopen(upstream, timeout=15) as response:
+                return Response(response.read(), status_code=response.status, media_type="application/json")
+        except urllib.error.HTTPError as error:
+            return Response(error.read(), status_code=error.code, media_type="application/json")
+        except (urllib.error.URLError, TimeoutError):
+            raise HTTPException(503, "Servizio UART non raggiungibile: aggiorna e avvia il servizio flash")
+    return await asyncio.to_thread(forward)
