@@ -16,13 +16,16 @@ RUN apt-get update && apt-get install -y \
 
 COPY requirements.txt .
 
-RUN git clone https://gitlab.eclipse.org/eclipse/aidge/aidge.git
-
 RUN pip install --no-cache-dir -r requirements.txt
 
+RUN git clone https://gitlab.eclipse.org/eclipse/aidge/aidge.git
+
 RUN cd aidge \
-    && ./setup.sh -m aidge_core -m aidge_backend_cpu -m aidge_onnx -m aidge_quantization -m export_cpp
+    && ./setup.sh -m aidge_core -m aidge_backend_cpu -m aidge_onnx -m export_cpp
+
+RUN cd aidge/aidge/aidge_quantization \
+    && pip install --no-deps . --config-settings cmake.define.AIDGE_ENABLE_CUDA=OFF
     
-COPY . .
+COPY main.py quant.py kafka_consumer.py minio_client.py ./
 
 CMD ["python", "main.py"]
