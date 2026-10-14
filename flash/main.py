@@ -12,6 +12,7 @@ from confluent_kafka import Producer as KafkaProducer
 
 from kafka_consumer import make_consumer, consume_loop, send_kafka_message
 from minio_client import make_client, download
+from uart_bridge import UARTBridge, start_uart_server
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -91,6 +92,7 @@ def _create_idf_project(idf_dir: Path, export_dir: Path):
     (idf_dir / "sdkconfig.defaults").write_text(
         "CONFIG_COMPILER_CXX_EXCEPTIONS=y\n"
         "CONFIG_COMPILER_CXX_RTTI=y\n"
+        "CONFIG_ESP_CONSOLE_NONE=y\n"
     )
 
     # Copy DNN component files
@@ -119,11 +121,43 @@ def _create_idf_project(idf_dir: Path, export_dir: Path):
         "target_compile_options(${COMPONENT_LIB} PRIVATE -std=c++17)\n"
     )
 
-    # Adapt main.cpp: int main() → extern "C" void app_main(void)
-    main_cpp = (export_dir / "main.cpp").read_text()
-    main_cpp = re.sub(r'int\s+main\s*\([^)]*\)', 'extern "C" void app_main(void)', main_cpp)
-    main_cpp = re.sub(r'\n(\s*)return\s+(0|EXIT_SUCCESS)\s*;', '', main_cpp)
-    (main_dir / "main.cpp").write_text(main_cpp)
+    metadata = json.loads((export_dir / "deployment.json").read_text())
+    if metadata.get("output_format") != "soh_float":
+        raise ValueError("Re-export model with SOH dequantization and scaler metadata")
+    count = len(metadata["feature_names"])
+    if not count or len(metadata["scale"]) != count or len(metadata["offset"]) != count:
+        raise ValueError("Invalid scaler dimensions")
+    import math
+    if not all(math.isfinite(v) for v in metadata["scale"] + metadata["offset"]):
+        raise ValueError("Non-finite scaler")
+    settings = {
+        "UART_PORT": int(os.getenv("INFERENCE_UART_PORT", "0")),
+        "UART_BAUD": int(os.getenv("INFERENCE_UART_BAUD", "115200")),
+        "UART_TX_GPIO": int(os.getenv("INFERENCE_UART_TX_GPIO", "1")),
+        "UART_RX_GPIO": int(os.getenv("INFERENCE_UART_RX_GPIO", "3")),
+        "LED_RGB_GPIO": int(os.getenv("LED_RGB_GPIO", "5")),
+        "LED_BRIGHTNESS": int(os.getenv("LED_BRIGHTNESS", "32")),
+    }
+    led_pin = settings["LED_RGB_GPIO"]
+    if led_pin not in {*range(0, 20), *range(21, 24), *range(25, 28), 32, 33} or 6 <= led_pin <= 11:
+        raise ValueError("WS2812 GPIO must be a valid ESP32 output, excluding flash pins")
+    if led_pin in {settings["UART_TX_GPIO"], settings["UART_RX_GPIO"]}:
+        raise ValueError("WS2812 GPIO must not overlap UART")
+    if not 1 <= settings["LED_BRIGHTNESS"] <= 255:
+        raise ValueError("LED_BRIGHTNESS must be between 1 and 255")
+    templates = Path(__file__).parent / "templates"
+    for name in ("main.cpp", "protocol.hpp", "led.hpp"):
+        shutil.copyfile(templates / name, main_dir / name)
+    shutil.copyfile(export_dir / "model_adapter.hpp", main_dir / "model_adapter.hpp")
+    header = "#pragma once\n#include <cstddef>\n"
+    header += f"constexpr size_t FEATURE_COUNT = {count};\n"
+    for name, value in settings.items():
+        header += f"constexpr int {name} = {value};\n"
+    for name, key in (("SCALE", "scale"), ("OFFSET", "offset")):
+        header += f"constexpr double {name}[] = {{" + ",".join(repr(v) for v in metadata[key]) + "};\n"
+    header += f"constexpr double INPUT_MULTIPLIER = {float(metadata['input_multiplier'])};\n"
+    header += "constexpr char JOB_ID[] = " + json.dumps(metadata["job_id"]) + ";\n"
+    (main_dir / "deployment.hpp").write_text(header)
 
     # main/CMakeLists.txt
     include_dirs = '"." "data"' if (main_dir / "data").exists() else '"."'
@@ -131,7 +165,7 @@ def _create_idf_project(idf_dir: Path, export_dir: Path):
         "idf_component_register(\n"
         "    SRCS \"main.cpp\"\n"
         f"    INCLUDE_DIRS {include_dirs}\n"
-        "    REQUIRES dnn\n"
+        "    REQUIRES dnn esp_driver_uart esp_driver_rmt\n"
         ")\n"
         "\n"
         "target_compile_options(${COMPONENT_LIB} PRIVATE -std=c++17)\n"
@@ -189,7 +223,7 @@ def _run_shell(cmd: str, cwd: Path, timeout: int = 600) -> subprocess.CompletedP
 
 # ── Job handler ─────────────────────────────────────────────────────────────
 
-def handle_job(job: dict):
+def _handle_job(job: dict):
     job_id       = job["job_id"]
     archive_path = job["export_archive"]
 
@@ -260,6 +294,18 @@ def handle_job(job: dict):
         if base_dir.exists():
             shutil.rmtree(base_dir)
             logger.info("Temporary folder cleaned for %s", job_id)
+
+
+uart_bridge = UARTBridge(
+    os.getenv("INFERENCE_SERIAL_PORT", FLASH_PORT),
+    int(os.getenv("INFERENCE_UART_BAUD", "115200")),
+)
+start_uart_server(uart_bridge, int(os.getenv("UART_API_PORT", "8081")))
+
+
+def handle_job(job: dict):
+    with uart_bridge.flash_session():
+        _handle_job(job)
 
 
 consumer = make_consumer(
