@@ -81,7 +81,7 @@
           <select name="label_column" id="labelSelect" required disabled>
             <option value="">— load the CSV first —</option>
           </select>
-          <div class="hint">Load the CSV to see the available columns</div>
+          <div class="hint"><span id="featureCount">Load the CSV to see the available columns</span></div>
         </div>
 
         <div class="field early-stopping-row">
@@ -177,7 +177,7 @@
       <div class="metrics-title">ESP32 Output</div>
       <pre id="espRawOutput" class="esp-raw-output"></pre>
       <div id="espDequantBlock" class="hidden">
-        <div class="esp-deq-label">Dequantized values (&#247; 127)</div>
+        <div class="esp-deq-label">SOH (%)</div>
         <div class="metrics-grid" id="espDequantGrid"></div>
       </div>
     </div>
@@ -189,8 +189,67 @@
     </div>
   </div>
 
+  <section class="card inference-panel" id="uartPanel" aria-labelledby="inferenceTitle">
+    <div class="card-header">
+      <div class="step-badge">3</div>
+      <div>
+        <span class="eyebrow">Try your model</span>
+        <h2 id="inferenceTitle">Battery health check</h2>
+      </div>
+    </div>
+    <p class="section-description">Connect your ESP32, choose a curve and check the estimated battery health.</p>
+    <p class="hint">Start once your model is ready on the board. Keep the ESP32 plugged into the server computer.</p>
+    <div class="button-row connection-actions">
+      <button type="button" id="connectUart" class="primary-btn">Connect ESP32</button>
+      <button type="button" id="disconnectUart" disabled>Disconnect</button>
+    </div>
+    <p id="uartStatus" class="connection-status" role="status">Connect your board to get started. Your samples will load automatically.</p>
+    <div class="field sample-field">
+      <label for="testSample">Choose a test curve</label>
+      <select id="testSample" disabled><option>Connect your board to load curves</option></select>
+      <p id="sampleProvenance" class="hint"></p>
+      <div class="button-row">
+        <button type="button" id="sendCurve" class="primary-btn" disabled>Check battery health</button>
+        <button type="button" id="streamCurves" disabled>Repeat all curves</button>
+        <button type="button" id="stopCurves" disabled>Stop</button>
+      </div>
+    </div>
+    <div class="health-result">
+      <span class="eyebrow">Estimated battery health</span>
+      <p id="liveSoh" role="status">Waiting for a result</p>
+      <p class="hint">Green: above 80% · Red: 80% or below</p>
+    </div>
+    <details class="custom-curve">
+      <summary>Use a custom curve</summary>
+      <div class="details-content">
+        <p class="hint">Upload a TXT or CSV file with one curve, or paste comma-separated values below. Use the original, unscaled measurements.</p>
+        <div class="file-upload">
+          <label class="file-btn" for="curveFile">Upload curve</label>
+          <input type="file" id="curveFile" accept=".txt,.csv">
+        </div>
+        <div class="field">
+          <label for="uartValues">Curve values</label>
+          <textarea id="uartValues" rows="4" placeholder="Paste your curve values here, separated by commas"></textarea>
+        </div>
+        <p class="hint">When your curve is ready, click “Check battery health” above.</p>
+        <div class="field model-source">
+          <label for="uartJob">Model ID</label>
+          <div class="model-source-controls">
+            <input id="uartJob" type="text" placeholder="Filled in automatically">
+            <button type="button" id="loadSamples">Load samples</button>
+          </div>
+        </div>
+        <button type="button" id="downloadSamples">Download samples</button>
+        <details class="device-details">
+          <summary>Device activity</summary>
+          <pre id="uartLog" class="esp-raw-output"></pre>
+        </details>
+      </div>
+    </details>
+  </section>
 </main>
 
 <script src="/static/js/dashboard.js"></script>
+<script src="/static/js/uart.js"></script>
 </body>
 </html>

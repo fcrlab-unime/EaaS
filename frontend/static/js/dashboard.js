@@ -127,6 +127,15 @@ function inferFromType(typeStr) {
 // ---------------------------------------------------------------------------
 
 let detectedClasses = [];
+let datasetColumns = [];
+function updateFeatureCount() {
+  const label = document.getElementById('labelSelect').value;
+  const count = datasetColumns.filter(c => c !== label).length;
+  document.getElementById('featureCount').textContent = datasetColumns.length
+    ? `${count} input features: set input_channels to ${count}. UART uses this same column order.`
+    : 'Load the CSV to see the available columns';
+}
+document.getElementById('labelSelect').addEventListener('change', updateFeatureCount);
 
 document.getElementById('modelScriptInput').addEventListener('change', function () {
   const file = this.files[0];
@@ -330,6 +339,8 @@ document.getElementById('datasetInput').addEventListener('change', function () {
   if (!file) {
     select.innerHTML = '<option value="">— load the CSV first —</option>';
     select.disabled = true;
+    datasetColumns = [];
+    updateFeatureCount();
     return;
   }
 
@@ -346,6 +357,8 @@ document.getElementById('datasetInput').addEventListener('change', function () {
     ).join('');
     select.disabled = false;
     select.selectedIndex = cols.length - 1;
+    datasetColumns = cols;
+    updateFeatureCount();
   };
   reader.readAsText(file);
 });
@@ -420,6 +433,7 @@ let _capturedMetrics = null;
 
 function startProgress(jobId) {
   _capturedMetrics = null;
+  window.dispatchEvent(new CustomEvent("pipeline-job", {detail: jobId}));
 
   document.getElementById('progressJobId').textContent = jobId;
   document.getElementById('progressBadge').textContent = 'Waiting';
@@ -489,6 +503,7 @@ function _handleEvent(ev) {
   }
 
   if (type === 'done') {
+    window.dispatchEvent(new CustomEvent('pipeline-ready', {detail: ev.job_id}));
     document.getElementById('epochProgress').classList.add('hidden');
     if (data && data.serial_output) {
       _showEspOutput(data.serial_output);
@@ -580,46 +595,24 @@ function _showDownloadButton(jobId) {
   document.getElementById('downloadBlock').classList.remove('hidden');
 }
 
-const _ESP_RESCALING = 127;
-
-function _parseEspInferenceValues(serial_output) {
-  // Aidge template prints: std::printf("%hhd ", output[i]) → space-separated int8 on one line
-  const lines = serial_output.split(/\r?\n/);
-  const results = [];
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    // Accept lines made ONLY of integers (int8 output, space-separated), no surrounding text
-    if (!/^-?\d+(\s+-?\d+)*$/.test(trimmed)) continue;
-    const nums = trimmed.split(/\s+/).map(Number);
-    if (nums.length > 0 && nums.every(n => Number.isInteger(n) && n >= -128 && n <= 127)) {
-      results.push(...nums);
-    }
-  }
-  return results;
-}
-
 function _showEspOutput(serial_output) {
-  const block = document.getElementById('espOutputBlock');
-  const rawPre = document.getElementById('espRawOutput');
-  const deqBlock = document.getElementById('espDequantBlock');
-  const deqGrid = document.getElementById('espDequantGrid');
-
-  // Filter out null bytes and normalize
   const cleaned = serial_output.replace(/\0/g, '').trim();
-  rawPre.textContent = cleaned;
-  block.classList.remove('hidden');
-
-  const values = _parseEspInferenceValues(cleaned);
-  if (values.length > 0) {
-    deqGrid.innerHTML = values.map((v, i) => `
-      <div class="metric-card">
-        <div class="metric-name">Output[${i}]</div>
-        <div class="metric-value">${(v / _ESP_RESCALING).toFixed(6)}</div>
-        <div class="metric-raw">(raw: ${v})</div>
-      </div>`).join('');
-    deqBlock.classList.remove('hidden');
+  document.getElementById('espRawOutput').textContent = cleaned;
+  document.getElementById('espOutputBlock').classList.remove('hidden');
+  // Firmware emits JSON with SOH already dequantized by the model.
+  const results = cleaned.split(/\r?\n/).flatMap(line => {
+    try { const value = JSON.parse(line); return value.type === 'inference' ? [value] : []; }
+    catch { return []; }
+  });
+  const grid = document.getElementById('espDequantGrid');
+  grid.replaceChildren();
+  for (const result of results) {
+    const card = document.createElement('div');
+    card.className = 'metric-card';
+    card.textContent = `SOH: ${result.soh.toFixed(2)}% — ${result.color}`;
+    grid.appendChild(card);
   }
+  document.getElementById('espDequantBlock').classList.toggle('hidden', !results.length);
 }
 
 function _showQuantMetrics(metrics) {
